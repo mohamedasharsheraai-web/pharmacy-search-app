@@ -7,6 +7,151 @@ import pandas as pd
 # إعدادات الصفحة
 st.set_page_config(page_title="نظام بحث الصيدليات", page_icon="💊", layout="wide")
 
+# ===== UI V2: Modern visual layer (no business logic changes) =====
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Cairo', sans-serif !important;
+}
+
+[data-testid="stAppViewContainer"] {
+    background: #f5f7fb;
+}
+
+[data-testid="stHeader"] {
+    background: rgba(245,247,251,0.85);
+}
+
+.block-container {
+    max-width: 1250px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+h1, h2, h3, h4 {
+    font-weight: 800 !important;
+    letter-spacing: -0.3px;
+}
+
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #102a43 0%, #163d5c 100%);
+}
+
+[data-testid="stSidebar"] * {
+    color: #ffffff !important;
+}
+
+[data-testid="stSidebar"] .stCaption {
+    color: #d9e8f5 !important;
+}
+
+.stButton > button {
+    border-radius: 12px !important;
+    border: 1px solid #dce3ec !important;
+    min-height: 46px !important;
+    font-weight: 700 !important;
+    transition: all .15s ease;
+    box-shadow: 0 2px 8px rgba(16,42,67,.06);
+}
+
+.stButton > button:hover {
+    transform: translateY(-1px);
+    border-color: #7aa7c7 !important;
+    box-shadow: 0 5px 14px rgba(16,42,67,.10);
+}
+
+[data-testid="stTextInput"] input,
+[data-testid="stSelectbox"] div[data-baseweb="select"] {
+    border-radius: 12px !important;
+}
+
+[data-testid="stTextInput"] input {
+    min-height: 46px;
+}
+
+[data-testid="stDataFrame"] {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #e3e8ef;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"] {
+    border-radius: 16px !important;
+    border: 1px solid #e3e8ef !important;
+    background: #ffffff;
+    box-shadow: 0 4px 16px rgba(16,42,67,.05);
+}
+
+div[data-testid="stAlert"] {
+    border-radius: 12px !important;
+}
+
+.hero {
+    background: linear-gradient(135deg, #123b5d 0%, #176b87 100%);
+    border-radius: 22px;
+    padding: 30px 34px;
+    color: white;
+    margin-bottom: 26px;
+    box-shadow: 0 12px 30px rgba(18,59,93,.18);
+}
+
+.hero h1 {
+    margin: 0 0 8px 0;
+    color: white !important;
+    font-size: 2.1rem !important;
+}
+
+.hero p {
+    margin: 0;
+    color: #e6f2f7;
+    font-size: 1rem;
+}
+
+.section-title {
+    margin: 10px 0 14px 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #17324d;
+}
+
+.metric-card {
+    background: white;
+    border: 1px solid #e4e9ef;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 4px 14px rgba(16,42,67,.05);
+}
+
+.metric-card .label {
+    color: #718096;
+    font-size: .88rem;
+}
+
+.metric-card .value {
+    color: #17324d;
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin-top: 5px;
+}
+
+[data-testid="stExpander"] {
+    border-radius: 14px !important;
+    border: 1px solid #e1e7ee !important;
+    background: white;
+}
+
+@media (max-width: 768px) {
+    .block-container { padding: 1rem .7rem 2rem .7rem; }
+    .hero { padding: 22px; border-radius: 17px; }
+    .hero h1 { font-size: 1.55rem !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+# ===== END UI V2 =====
+
+
 USER_DB_FILE = "users.json"
 DATA_FOLDER = "data"
 
@@ -36,39 +181,17 @@ def save_users(users):
 def is_excel_file(filename):
     return filename.lower().endswith(('.xlsx', '.xls'))
 
-# دالة ذكية لاكتشاف الصف الصحيح للـ Header برصد أعلى عدد مطابقات مع الأعمدة المتوقعة
 def read_excel_smart(file_path):
-    expected_headers = [
-        'date', 'invoice date', 'التاريخ',
-        'branch', 'branch code', 'branch name', 'كود الفرع', 'اسم الفرع', 'الفرع',
-        'supplier code', 'supplier name',
-        'item code', 'item name', 'mat. desc.', 'المنتج', 'اسم المنتج',
-        'brick', 'governorate name', 'governorate', 'المحافظة', 'المنطقة',
-        'territory name', 'territory', 'brick name',
-        'client', 'client code', 'client name', 'customer', 'customer code', 'customer name', 
-        'اسم العميل', 'كود العميل', 'الصيدلية',
-        'quantity', 'qty', 'الكمية', 'value'
-    ]
-    
     df_temp = pd.read_excel(file_path, header=None, nrows=20)
-    
-    best_header_row = 0
-    max_matches = 0
-    
-    for idx, row in df_temp.iterrows():
-        row_values = row.dropna().astype(str).str.lower().str.strip().tolist()
-        
-        matches_count = 0
-        for val in row_values:
-            clean_val = re.sub(r'\s+', ' ', val)
-            if any(clean_val == h or h in clean_val for h in expected_headers):
-                matches_count += 1
-        
-        if matches_count > max_matches and matches_count >= 3:
-            max_matches = matches_count
-            best_header_row = idx
+    header_row = 0
 
-    df = pd.read_excel(file_path, header=best_header_row)
+    for idx, row in df_temp.iterrows():
+        row_str = row.astype(str).str.lower().to_string()
+        if any(k in row_str for k in ['customer', 'customer name', 'client', 'branch', 'mat. desc.', 'item name']):
+            header_row = idx
+            break
+
+    df = pd.read_excel(file_path, header=header_row)
     df.columns = df.columns.astype(str).str.strip()
     return df
 
@@ -87,18 +210,21 @@ def clean_code_val(val):
     clean_code = val_str.lstrip('0')
     return clean_code if clean_code else '0'
 
-# دالة استخراج السنة والشهر من اسم الملف
+# 3. دالة استخراج السنة والشهر من اسم الملف
 def extract_year_month_from_filename(file_name):
     base_name = os.path.splitext(file_name)[0]
     
+    # البادئة القياسية (2026_02_اسم_الملف)
     m_prefix = re.match(r'^(\d{4})_(\d{1,2})', base_name)
     if m_prefix:
         y, m = int(m_prefix.group(1)), int(m_prefix.group(2))
         return f"{y}_{m:02d}"
 
+    # البحث عن السنة (4 أرقام)
     year_match = re.search(r'(20\d{2})', base_name)
     year = int(year_match.group(1)) if year_match else 2026
 
+    # أسماء الشهور بالعربية
     arabic_months = {
         'يناير': 1, 'فبراير': 2, 'مارس': 3, 'أبريل': 4, 'ابريل': 4,
         'مايو': 5, 'يونيو': 6, 'يوليو': 7, 'أغسطس': 8, 'اغسطس': 8,
@@ -108,6 +234,7 @@ def extract_year_month_from_filename(file_name):
         if month_name in base_name:
             return f"{year}_{m_num:02d}"
 
+    # أشكال مثل: 12-2025 أو 2-2026 أو 4-2026
     m_ym = re.search(r'(\d{1,2})\s*[-_]\s*(20\d{2})', base_name)
     if m_ym:
         m, y = int(m_ym.group(1)), int(m_ym.group(2))
@@ -118,6 +245,7 @@ def extract_year_month_from_filename(file_name):
         y, m = int(m_my.group(1)), int(m_my.group(2))
         return f"{y}_{m:02d}"
 
+    # أشكال مثل: فارما 9 أو فارما 7 أو فارما 3
     m_single = re.search(r'(?:شهر|\b)\s*(\d{1,2})\b', base_name)
     if m_single:
         m = int(m_single.group(1))
@@ -139,6 +267,7 @@ def load_distributor_data(folder_path):
         try:
             df = read_excel_smart(file_path)
             
+            # محاولة استخراج التاريخ أولاً من أعمدة التاريخ
             year_month = None
             date_col = next((c for c in df.columns if any(k in c.lower() for k in ['invoice date', 'date', 'التاريخ'])), None)
             
@@ -152,13 +281,15 @@ def load_distributor_data(folder_path):
                 except Exception:
                     year_month = None
             
+            # إذا لم يجد تاريخاً صالحاً في الأعمدة، يتجه لاستخراجه من اسم الملف
             if not year_month or year_month == "غير محدد":
                 year_month = extract_year_month_from_filename(file_name)
 
             df['سنة_شهر'] = year_month
             df['المصدر_الملف'] = file_name
             dataframes.append(df)
-        except Exception:
+        except Exception as e:
+            # عدم إهمال الخطأ بصمت لتوضيحه في شاشة الفحص
             continue
 
     if dataframes:
@@ -197,9 +328,9 @@ def audit_uploaded_files():
 
 # تهيئة الجلسة
 if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = True
+    st.session_state['logged_in'] = False
 if 'user_info' not in st.session_state:
-    st.session_state['user_info'] = {"phone": "01000000000", "name": "المدير العام", "role": "admin"}
+    st.session_state['user_info'] = {}
 if 'current_page' not in st.session_state:
     st.session_state['current_page'] = 'welcome'
 if 'selected_year' not in st.session_state:
@@ -219,333 +350,389 @@ def clear_region():
     st.session_state['selected_region_key'] = "كل المناطق"
 
 # ==========================================
-# 🏠 النظام الأساسي
+# 🔒 1. صفحة تسجيل الدخول
 # ==========================================
-user = st.session_state['user_info']
+if not st.session_state['logged_in']:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.write("")
+        st.write("")
+        st.markdown("<h2 style='text-align: center;'>🔒 تسجيل الدخول للنظام</h2>", unsafe_allow_html=True)
+        st.write("")
 
-with st.sidebar:
-    st.write(f"👤 **أهلاً: {user['name']}**")
-    st.caption(f"الرتبة: {'مدير نظام' if user['role'] == 'admin' else 'مستخدم'}")
-    
-    if st.button("الرئيسية 🏠", use_container_width=True):
-        st.session_state['current_page'] = 'welcome'
-        st.rerun()
+        phone_input = st.text_input("📱 رقم التليفون:", placeholder="أدخل رقم التليفون")
+        password_input = st.text_input("🔑 كلمة المرور:", type="password", placeholder="أدخل كلمة المرور")
 
-    if user['role'] == 'admin':
+        st.write("")
+        if st.button("دخول 🚀", use_container_width=True):
+            users = load_users()
+            if phone_input in users and users[phone_input]["password"] == password_input:
+                st.session_state['logged_in'] = True
+                st.session_state['user_info'] = {
+                    "phone": phone_input,
+                    "name": users[phone_input]["name"],
+                    "role": users[phone_input]["role"]
+                }
+                st.rerun()
+            else:
+                st.error("خطأ في رقم الهاتف أو كلمة المرور، يرجى مراجعة المحاولة.")
+
+# ==========================================
+# 🏠 2. النظام الأساسي
+# ==========================================
+else:
+    user = st.session_state['user_info']
+
+    with st.sidebar:
+        st.write(f"👤 **أهلاً: {user['name']}**")
+        st.caption(f"الرتبة: {'مدير نظام' if user['role'] == 'admin' else 'مستخدم'}")
+        
+        if st.button("الرئيسية 🏠", use_container_width=True):
+            st.session_state['current_page'] = 'welcome'
+            st.rerun()
+
+        if user['role'] == 'admin':
+            st.markdown("---")
+            st.subheader("⚙️ لوحة التحكم")
+
+            with st.expander("👤 ➕ إضافة مستخدم جديد"):
+                new_name = st.text_input("الاسم:")
+                new_phone = st.text_input("رقم التليفون:")
+                new_pass = st.text_input("كلمة المرور:", type="password")
+                new_role = st.selectbox("نوع الحساب:", ["user", "admin"])
+                
+                if st.button("حفظ الحساب 💾", use_container_width=True):
+                    if new_phone and new_pass and new_name:
+                        users = load_users()
+                        users[new_phone] = {"name": new_name, "password": new_pass, "role": new_role}
+                        save_users(users)
+                        st.success("تمت إضافة الحساب بنجاح!")
+                    else:
+                        st.warning("يرجى ملء جميع البيانات.")
+
+            if st.button("📁 ارفع ملفاتك (إدارة المكتبة)", use_container_width=True):
+                st.session_state['current_page'] = 'upload_select_distributor'
+                st.rerun()
+
+            if st.button("🔍 فحص سلامة الشيتات المرفوعة", use_container_width=True):
+                st.session_state['current_page'] = 'health_check'
+                st.rerun()
+
         st.markdown("---")
-        st.subheader("⚙️ لوحة التحكم")
-
-        with st.expander("👤 ➕ إضافة مستخدم جديد"):
-            new_name = st.text_input("الاسم:")
-            new_phone = st.text_input("رقم التليفون:")
-            new_pass = st.text_input("كلمة المرور:", type="password")
-            new_role = st.selectbox("نوع الحساب:", ["user", "admin"])
-            
-            if st.button("حفظ الحساب 💾", use_container_width=True):
-                if new_phone and new_pass and new_name:
-                    users = load_users()
-                    users[new_phone] = {"name": new_name, "password": new_pass, "role": new_role}
-                    save_users(users)
-                    st.success("تمت إضافة الحساب بنجاح!")
-                else:
-                    st.warning("يرجى ملء جميع البيانات.")
-
-        if st.button("📁 ارفع ملفاتك (إدارة المكتبة)", use_container_width=True):
-            st.session_state['current_page'] = 'upload_select_distributor'
+        if st.button("تسجيل الخروج 🚪", use_container_width=True):
+            st.session_state['logged_in'] = False
+            st.session_state['user_info'] = {}
+            st.session_state['current_page'] = 'welcome'
             st.rerun()
 
-        if st.button("🔍 فحص سلامة الشيتات المرفوعة", use_container_width=True):
-            st.session_state['current_page'] = 'health_check'
-            st.rerun()
+    # --- الرئيسية ---
+    if st.session_state['current_page'] == 'welcome':
+        st.markdown(f"""
+        <div class="hero" dir="rtl">
+            <h1>👋 أهلاً بك يا {user['name']}</h1>
+            <p>نظام البحث وإدارة بيانات الصيدليات — اختر قاعدة البيانات للبدء.</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("---")
+        st.markdown('<div class="section-title" dir="rtl">اختر الموزع</div>', unsafe_allow_html=True)
 
-# --- الرئيسية ---
-if st.session_state['current_page'] == 'welcome':
-    st.markdown(f"<h1 style='text-align: center;'>👋 أهلاً بك يا {user['name']}</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center; color: gray;'>اختر الموزع للبدء في عملية البحث</h4>", unsafe_allow_html=True)
-    st.write("")
+        c1, c2 = st.columns(2, gap="large")
+        with c1:
+            with st.container(border=True):
+                st.markdown("""
+                <div dir="rtl" style="padding:8px 4px 12px 4px;">
+                    <div style="font-size:2rem;">🏢</div>
+                    <div style="font-size:1.25rem;font-weight:800;color:#17324d;">ابن سينا</div>
+                    <div style="color:#718096;margin:4px 0 14px;">البحث في قاعدة بيانات ابن سينا</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("فتح قاعدة ابن سينا  →", key="home_ibnsina", use_container_width=True):
+                    st.session_state['current_page'] = 'ibnsina'
+                    st.rerun()
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("---")
-        if st.button("🏢 البحث في ابن سينا", use_container_width=True):
-            st.session_state['current_page'] = 'ibnsina'
-            st.rerun()
+        with c2:
+            with st.container(border=True):
+                st.markdown("""
+                <div dir="rtl" style="padding:8px 4px 12px 4px;">
+                    <div style="font-size:2rem;">📦</div>
+                    <div style="font-size:1.25rem;font-weight:800;color:#17324d;">فارما أوفيرسيز</div>
+                    <div style="color:#718096;margin:4px 0 14px;">البحث في قاعدة بيانات فارما</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("فتح قاعدة فارما  →", key="home_pharma", use_container_width=True):
+                    st.session_state['current_page'] = 'pharma'
+                    st.rerun()
 
-    with c2:
-        st.markdown("---")
-        if st.button("📦 البحث في فارما", use_container_width=True):
-            st.session_state['current_page'] = 'pharma'
-            st.rerun()
+    elif st.session_state['current_page'] == 'upload_select_distributor':
+        st.header("📁 إدارة مكتبة الشيتات - اختر الموزع")
+        col_ibn, col_ph = st.columns(2)
+        with col_ibn:
+            if st.button("🏢 مكتبة ابن سينا", use_container_width=True):
+                st.session_state['selected_upload_dist'] = "ibnsina"
+                st.session_state['current_page'] = 'upload_calendar'
+                st.rerun()
+        with col_ph:
+            if st.button("📦 مكتبة فارما أوفيرسيز", use_container_width=True):
+                st.session_state['selected_upload_dist'] = "pharma"
+                st.session_state['current_page'] = 'upload_calendar'
+                st.rerun()
 
-elif st.session_state['current_page'] == 'upload_select_distributor':
-    st.header("📁 إدارة مكتبة الشيتات - اختر الموزع")
-    col_ibn, col_ph = st.columns(2)
-    with col_ibn:
-        if st.button("🏢 مكتبة ابن سينا", use_container_width=True):
-            st.session_state['selected_upload_dist'] = "ibnsina"
-            st.session_state['current_page'] = 'upload_calendar'
-            st.rerun()
-    with col_ph:
-        if st.button("📦 مكتبة فارما أوفيرسيز", use_container_width=True):
-            st.session_state['selected_upload_dist'] = "pharma"
-            st.session_state['current_page'] = 'upload_calendar'
-            st.rerun()
+    elif st.session_state['current_page'] == 'upload_calendar':
+        dist_name = "ابن سينا" if st.session_state['selected_upload_dist'] == "ibnsina" else "فارما أوفيرسيز"
+        target_dir = IBNSINA_FOLDER if st.session_state['selected_upload_dist'] == "ibnsina" else PHARMA_FOLDER
 
-elif st.session_state['current_page'] == 'upload_calendar':
-    dist_name = "ابن سينا" if st.session_state['selected_upload_dist'] == "ibnsina" else "فارما أوفيرسيز"
-    target_dir = IBNSINA_FOLDER if st.session_state['selected_upload_dist'] == "ibnsina" else PHARMA_FOLDER
+        st.button("⬅️ تغيير الموزع", on_click=lambda: st.session_state.update({'current_page': 'upload_select_distributor'}))
+        st.header(f"🗓️ تقويم الشيتات المرفوعة - {dist_name}")
 
-    st.button("⬅️ تغيير الموزع", on_click=lambda: st.session_state.update({'current_page': 'upload_select_distributor'}))
-    st.header(f"🗓️ تقويم الشيتات المرفوعة - {dist_name}")
+        col_y1, col_y2, col_y3 = st.columns([1, 2, 1])
+        with col_y1:
+            if st.button("◀️ السنة السابقة"):
+                st.session_state['selected_year'] -= 1
+                st.rerun()
+        with col_y2:
+            st.markdown(f"<h3 style='text-align: center;'>سنة {st.session_state['selected_year']}</h3>", unsafe_allow_html=True)
+        with col_y3:
+            if st.button("السنة القادمة ▶️"):
+                st.session_state['selected_year'] += 1
+                st.rerun()
 
-    col_y1, col_y2, col_y3 = st.columns([1, 2, 1])
-    with col_y1:
-        if st.button("◀️ السنة السابقة"):
-            st.session_state['selected_year'] -= 1
-            st.rerun()
-    with col_y2:
-        st.markdown(f"<h3 style='text-align: center;'>سنة {st.session_state['selected_year']}</h3>", unsafe_allow_html=True)
-    with col_y3:
-        if st.button("السنة القادمة ▶️"):
-            st.session_state['selected_year'] += 1
-            st.rerun()
+        st.divider()
 
-    st.divider()
+        months = [
+            "01 - يناير", "02 - فبراير", "03 - مارس", "04 - أبريل", 
+            "05 - مايو", "06 - يونيو", "07 - يوليو", "08 - أغسطس", 
+            "09 - سبتمبر", "10 - أكتوبر", "11 - نوفمبر", "12 - ديسمبر"
+        ]
 
-    months = [
-        "01 - يناير", "02 - فبراير", "03 - مارس", "04 - أبريل", 
-        "05 - مايو", "06 - يونيو", "07 - يوليو", "08 - أغسطس", 
-        "09 - سبتمبر", "10 - أكتوبر", "11 - نوفمبر", "12 - ديسمبر"
-    ]
+        for idx in range(0, 12, 3):
+            cols = st.columns(3)
+            for j in range(3):
+                m_idx = idx + j
+                if m_idx < 12:
+                    month_str = months[m_idx]
+                    year_val = st.session_state['selected_year']
+                    file_prefix = f"{year_val}_{m_idx+1:02d}"
 
-    for idx in range(0, 12, 3):
-        cols = st.columns(3)
-        for j in range(3):
-            m_idx = idx + j
-            if m_idx < 12:
-                month_str = months[m_idx]
-                year_val = st.session_state['selected_year']
-                file_prefix = f"{year_val}_{m_idx+1:02d}"
+                    # دعم الامتدادات المختلفة في التقويم عبر is_excel_file
+                    existing_files = [f for f in os.listdir(target_dir) if is_excel_file(f) and (f.startswith(file_prefix) or extract_year_month_from_filename(f) == file_prefix)]
 
-                existing_files = [f for f in os.listdir(target_dir) if is_excel_file(f) and (f.startswith(file_prefix) or extract_year_month_from_filename(f) == file_prefix)]
+                    with cols[j]:
+                        with st.container(border=True):
+                            st.subheader(month_str)
 
-                with cols[j]:
-                    with st.container(border=True):
-                        st.subheader(month_str)
+                            if existing_files:
+                                current_file = existing_files[0]
+                                st.success(f"📄 {current_file}")
+                                if st.button(f"❌ مسح ملف {month_str}", key=f"del_{file_prefix}"):
+                                    os.remove(os.path.join(target_dir, current_file))
+                                    st.cache_data.clear()
+                                    st.success("تم الحذف!")
+                                    st.rerun()
+                            else:
+                                st.info("لا يوجد شيت مرفوع")
+                                new_file = st.file_uploader(f"رفع شيت {month_str}:", type=["xlsx", "xls", "XLSX", "XLS"], key=f"up_{file_prefix}")
+                                if new_file:
+                                    save_name = f"{file_prefix}_{new_file.name}"
+                                    with open(os.path.join(target_dir, save_name), "wb") as f:
+                                        f.write(new_file.getbuffer())
+                                    st.cache_data.clear()
+                                    st.success("تم الرفع بنجاح!")
+                                    st.rerun()
 
-                        if existing_files:
-                            current_file = existing_files[0]
-                            st.success(f"📄 {current_file}")
-                            if st.button(f"❌ مسح ملف {month_str}", key=f"del_{file_prefix}"):
-                                os.remove(os.path.join(target_dir, current_file))
-                                st.cache_data.clear()
-                                st.success("تم الحذف!")
-                                st.rerun()
-                        else:
-                            st.info("لا يوجد شيت مرفوع")
-                            new_file = st.file_uploader(f"رفع شيت {month_str}:", type=["xlsx", "xls", "XLSX", "XLS"], key=f"up_{file_prefix}")
-                            if new_file:
-                                save_name = f"{file_prefix}_{new_file.name}"
-                                with open(os.path.join(target_dir, save_name), "wb") as f:
-                                    f.write(new_file.getbuffer())
-                                st.cache_data.clear()
-                                st.success("تم الرفع بنجاح!")
-                                st.rerun()
-
-# --- شاشة فحص سلامة الملفات ---
-elif st.session_state['current_page'] == 'health_check':
-    st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
-    st.header("🔍 نتيجة فحص سلامة وقراءة الشيتات المرفوعة")
-    st.write("يقوم النظام بمسح وفحص كافة شيتات الإكسيل المرفوعة للتيقن من سلامة قراءتها في قواعد البيانات:")
-
-    with st.spinner("جاري فحص جميع الملفات المرفوعة..."):
-        total_count, errors = audit_uploaded_files()
-
-    st.divider()
-
-    if total_count == 0:
-        st.info("ℹ️ لا توجد أي ملفات مرفوعة حالياً في النظام لتتم المراجعة عليها.")
-    elif not errors:
-        st.success(f"🟢 **ممتاز جداً! جميع الملفات المرفوعة (عددها {total_count} ملف) سليمة ومقروءة 100% بدون أي مشاكل.**")
-    else:
-        st.warning(f"⚠️ تم فحص {total_count} ملف، وعثر النظام على بعض الملاحظات أو الأخطاء في {len(errors)} ملف:")
-        for dist, fname, issue in errors:
-            st.error(f"🏢 **الموزع:** {dist} | 📄 **الملف:** `{fname}` 👈 **المشكلة:** {issue}")
-
-# --- شاشة البحث ---
-elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
-    dist_code = st.session_state['current_page']
-    dist_title = "ابن سينا" if dist_code == 'ibnsina' else "فارما أوفيرسيز"
-    target_folder = IBNSINA_FOLDER if dist_code == 'ibnsina' else PHARMA_FOLDER
-
-    c_top1, c_top2 = st.columns([4, 1])
-    with c_top1:
+    # --- شاشة فحص سلامة الملفات ---
+    elif st.session_state['current_page'] == 'health_check':
         st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
-    with c_top2:
-        if st.button("🔄 تحديث البيانات", help="اضغط هنا لإلغاء أي ذاكرة مؤقتة وتطبيق القواعد الجديدة"):
-            st.cache_data.clear()
-            st.rerun()
+        st.header("🔍 نتيجة فحص سلامة وقراءة الشيتات المرفوعة")
+        st.write("يقوم النظام بمسح وفحص كافة شيتات الإكسيل المرفوعة للتيقن من سلامة قراءتها في قواعد البيانات:")
 
-    st.header(f"🔍 البحث في قاعدة بيانات: {dist_title}")
+        with st.spinner("جاري فحص جميع الملفات المرفوعة..."):
+            total_count, errors = audit_uploaded_files()
 
-    df_dist = load_distributor_data(target_folder)
+        st.divider()
 
-    if df_dist is None or df_dist.empty:
-        st.warning(f"لا توجد شيتات مرفوعة حالياً في مكتبة {dist_title}. برجاء الذهاب لـ 'ارفع ملفاتك' ورفع الشيتات أولاً.")
-    else:
-        cols = list(df_dist.columns)
-        
-        c_code = next((c for c in cols if c.strip().lower() in ['customer', 'client code', 'كود العميل', 'customer code']), None)
-        c_name = next((c for c in cols if c.strip().lower() in ['customer name', 'client name', 'اسم العميل', 'الصيدلية']), cols[0])
-        region_col = next((c for c in cols if c.strip().lower() in ['sal. dist. desc.', 'governorate', 'governorate name', 'المحافظة', 'المنطقة']), None)
-        
-        b_code = next((c for c in cols if c.strip().lower() in ['branch', 'branch code', 'كود الفرع']), None)
-        b_name = next((c for c in cols if c.strip().lower() in ['branch name', 'اسم الفرع', 'الفرع']), None)
-        
-        item_col = next((c for c in cols if c.strip().lower() in ['mat. desc.', 'item name', 'المنتج']), None)
-        qty_col = next((c for c in cols if c.strip().lower() in ['qty', 'quantity', 'الكمية']), None)
-        addr_col = next((c for c in cols if c.strip().lower() in ['customer address', 'address_en', 'address_ar', 'العنوان']), None)
-
-        df_dist[c_name] = df_dist[c_name].astype(str).str.strip()
-        
-        if c_code and c_code in df_dist.columns:
-            df_dist['clean_code'] = df_dist[c_code].apply(clean_code_val)
+        if total_count == 0:
+            st.info("ℹ️ لا توجد أي ملفات مرفوعة حالياً في النظام لتتم المراجعة عليها.")
+        elif not errors:
+            st.success(f"🟢 **ممتاز جداً! جميع الملفات المرفوعة (عددها {total_count} ملف) سليمة ومقروءة 100% بدون أي مشاكل.**")
         else:
-            df_dist['clean_code'] = '-'
+            st.warning(f"⚠️ تم فحص {total_count} ملف، وعثر النظام على بعض الملاحظات أو الأخطاء في {len(errors)} ملف:")
+            for dist, fname, issue in errors:
+                st.error(f"🏢 **الموزع:** {dist} | 📄 **الملف:** `{fname}` 👈 **المشكلة:** {issue}")
 
-        if b_code and b_code in df_dist.columns:
-            df_dist[b_code] = df_dist[b_code].astype(str).str.strip()
-        if b_name and b_name in df_dist.columns:
-            df_dist[b_name] = df_dist[b_name].astype(str).str.strip()
-        if region_col and region_col in df_dist.columns:
-            df_dist[region_col] = df_dist[region_col].astype(str).str.strip()
+    # --- شاشة البحث ---
+    elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
+        dist_code = st.session_state['current_page']
+        dist_title = "ابن سينا" if dist_code == 'ibnsina' else "فارما أوفيرسيز"
+        target_folder = IBNSINA_FOLDER if dist_code == 'ibnsina' else PHARMA_FOLDER
 
-        st.markdown("### 🔍 أدوات تصفية البحث:")
-        c_inp, c_clr_inp, c_reg, c_clr_reg = st.columns([3, 0.4, 2.6, 0.4])
+        c_top1, c_top2 = st.columns([4, 1])
+        with c_top1:
+            st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
+        with c_top2:
+            if st.button("🔄 تحديث البيانات", help="اضغط هنا لإلغاء أي ذاكرة مؤقتة وتطبيق القواعد الجديدة"):
+                st.cache_data.clear()
+                st.rerun()
 
-        with c_inp:
-            name_query = st.text_input(
-                "1. اكتب كود العميل (أو الاسم):", 
-                key="search_query", 
-                placeholder="مثال: 1522888 / شوكت"
-            )
+        st.markdown(f"""
+        <div class="hero" dir="rtl">
+            <h1>🔍 البحث في قاعدة بيانات {dist_title}</h1>
+            <p>ابحث باسم الصيدلية أو كود العميل، ثم اختر النتيجة لعرض كامل سجل المسحوبات.</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        with c_clr_inp:
-            st.write("")
-            st.write("")
-            st.button("❌", key="btn_clr_search", on_click=clear_search, help="مسح خانة البحث")
+        df_dist = load_distributor_data(target_folder)
 
-        with c_reg:
-            available_regions = ["كل المناطق"]
+        if df_dist is None or df_dist.empty:
+            st.warning(f"لا توجد شيتات مرفوعة حالياً في مكتبة {dist_title}. برجاء الذهاب لـ 'ارفع ملفاتك' ورفع الشيتات أولاً.")
+        else:
+            cols = list(df_dist.columns)
+            
+            c_code = next((c for c in cols if c.strip().lower() in ['customer', 'client code', 'كود العميل', 'customer code']), None)
+            c_name = next((c for c in cols if c.strip().lower() in ['customer name', 'client name', 'اسم العميل', 'الصيدلية']), cols[0])
+            region_col = next((c for c in cols if c.strip().lower() in ['sal. dist. desc.', 'governorate', 'المافظة', 'المنطقة']), None)
+            
+            b_code = next((c for c in cols if c.strip().lower() in ['branch', 'branch code', 'كود الفرع']), None)
+            b_name = next((c for c in cols if c.strip().lower() in ['branch name', 'اسم الفرع', 'الفرع']), None)
+            
+            item_col = next((c for c in cols if c.strip().lower() in ['mat. desc.', 'item name', 'المنتج']), None)
+            qty_col = next((c for c in cols if c.strip().lower() in ['qty', 'quantity', 'الكمية']), None)
+            addr_col = next((c for c in cols if c.strip().lower() in ['customer address', 'address_en', 'العنوان']), None)
+
+            df_dist[c_name] = df_dist[c_name].astype(str).str.strip()
+            
+            if c_code and c_code in df_dist.columns:
+                df_dist['clean_code'] = df_dist[c_code].apply(clean_code_val)
+            else:
+                df_dist['clean_code'] = '-'
+
+            if b_code and b_code in df_dist.columns:
+                df_dist[b_code] = df_dist[b_code].astype(str).str.strip()
+            if b_name and b_name in df_dist.columns:
+                df_dist[b_name] = df_dist[b_name].astype(str).str.strip()
             if region_col and region_col in df_dist.columns:
-                raw_regs = df_dist[region_col].dropna().unique().tolist()
-                clean_regs = sorted([r for r in raw_regs if r and r.lower() != 'nan'])
-                available_regions.extend(clean_regs)
+                df_dist[region_col] = df_dist[region_col].astype(str).str.strip()
 
-            if st.session_state['selected_region_key'] not in available_regions:
-                st.session_state['selected_region_key'] = "كل المناطق"
+            st.markdown("### 🔍 أدوات تصفية البحث:")
+            c_inp, c_clr_inp, c_reg, c_clr_reg = st.columns([3, 0.4, 2.6, 0.4])
 
-            selected_region = st.selectbox(
-                "2. اختر المنطقة (تخمين أوتوماتيكي من الشيتات):", 
-                options=available_regions,
-                key="selected_region_key"
-            )
-
-        with c_clr_reg:
-            st.write("")
-            st.write("")
-            st.button("❌", key="btn_clr_region", on_click=clear_region, help="مسح المنطقة وإرجاع الكل")
-
-        filtered_df = df_dist.copy()
-
-        if region_col and selected_region != "كل المناطق":
-            filtered_df = filtered_df[filtered_df[region_col] == selected_region]
-
-        if name_query.strip():
-            q_clean = name_query.strip().lstrip('0')
-            mask = pd.Series(False, index=filtered_df.index)
-            
-            if c_name in filtered_df.columns:
-                mask = mask | filtered_df[c_name].str.contains(name_query.strip(), case=False, na=False, regex=False)
-            if 'clean_code' in filtered_df.columns:
-                mask = mask | filtered_df['clean_code'].str.contains(q_clean, case=False, na=False, regex=False)
-            
-            filtered_df = filtered_df[mask]
-
-        if name_query.strip() or selected_region != "كل المناطق":
-            if not filtered_df.empty:
-                unique_clients = filtered_df[['clean_code', c_name, region_col] if region_col else ['clean_code', c_name]].drop_duplicates(subset=['clean_code'])
-
-                pharmacy_options = []
-                for _, row in unique_clients.iterrows():
-                    p_code_val = str(row.get('clean_code', '-'))
-                    p_name = row.get(c_name, 'بدون اسم')
-                    p_reg = str(row.get(region_col, 'غير محدد')) if region_col else '-'
-
-                    label = f"🔑 الكود: {p_code_val} | 🏥 {p_name} | 📍 المنطقة: {p_reg}"
-                    pharmacy_options.append((label, p_code_val, p_name))
-
-                st.write("")
-                selected_choice = st.selectbox(
-                    "🎯 النتائج المطابقة (اختر العميل للنتائج التفصيلية):", 
-                    options=pharmacy_options, 
-                    format_func=lambda x: x[0]
+            with c_inp:
+                name_query = st.text_input(
+                    "1. اكتب كود العميل (أو الاسم):", 
+                    key="search_query", 
+                    placeholder="مثال: 1522888 / شوكت"
                 )
 
-                if selected_choice:
-                    target_code = selected_choice[1]
-                    target_pharm_name = selected_choice[2]
+            with c_clr_inp:
+                st.write("")
+                st.write("")
+                st.button("❌", key="btn_clr_search", on_click=clear_search, help="مسح خانة البحث")
 
-                    if target_code != '-' and target_code != '':
-                        pharm_details = df_dist[
-                            (df_dist['clean_code'] == target_code) |
-                            (df_dist[c_name] == target_pharm_name)
-                        ]
-                    else:
-                        pharm_details = df_dist[df_dist[c_name] == target_pharm_name]
+            with c_reg:
+                available_regions = ["كل المناطق"]
+                if region_col and region_col in df_dist.columns:
+                    raw_regs = df_dist[region_col].dropna().unique().tolist()
+                    clean_regs = sorted([r for r in raw_regs if r and r.lower() != 'nan'])
+                    available_regions.extend(clean_regs)
 
-                    if 'سنة_شهر' in pharm_details.columns:
-                        pharm_details = pharm_details.sort_values(by=['سنة_شهر'], ascending=True)
+                if st.session_state['selected_region_key'] not in available_regions:
+                    st.session_state['selected_region_key'] = "كل المناطق"
 
-                    st.divider()
-                    st.subheader(f"📌 كارت البيانات للصيدلية: {target_pharm_name}")
+                selected_region = st.selectbox(
+                    "2. اختر المنطقة (تخمين أوتوماتيكي من الشيتات):", 
+                    options=available_regions,
+                    key="selected_region_key"
+                )
 
-                    first_row = pharm_details.iloc[0]
-                    val_code = first_row.get('clean_code', '-')
-                    val_name = str(first_row.get(c_name, '-'))
-                    val_region = str(first_row.get(region_col, '-')) if region_col else '-'
+            with c_clr_reg:
+                st.write("")
+                st.write("")
+                st.button("❌", key="btn_clr_region", on_click=clear_region, help="مسح المنطقة وإرجاع الكل")
 
-                    m1, m2, m3 = st.columns(3)
-                    
-                    with m1:
-                        st.caption("🔑 كود الصيدلية الثابت (اضغط للنسخ):")
-                        st.code(val_code, language=None)
+            filtered_df = df_dist.copy()
 
-                    with m2:
-                        st.caption("🏥 اسم الصيدلية بالكامل:")
-                        st.code(val_name, language=None)
+            if region_col and selected_region != "كل المناطق":
+                filtered_df = filtered_df[filtered_df[region_col] == selected_region]
 
-                    with m3:
-                        st.caption("📍 المنطقة / المحافظة:")
-                        st.code(val_region, language=None)
+            if name_query.strip():
+                q_clean = name_query.strip().lstrip('0')
+                mask = pd.Series(False, index=filtered_df.index)
+                
+                if c_name in filtered_df.columns:
+                    mask = mask | filtered_df[c_name].str.contains(name_query.strip(), case=False, na=False, regex=False)
+                if 'clean_code' in filtered_df.columns:
+                    mask = mask | filtered_df['clean_code'].str.contains(q_clean, case=False, na=False, regex=False)
+                
+                filtered_df = filtered_df[mask]
 
-                    if addr_col and addr_col in first_row:
-                        val_addr = str(first_row.get(addr_col, '-'))
-                        st.caption("📍 العنوان التفصيلي (اضغط للنسخ):")
-                        st.code(val_addr, language=None)
+            if name_query.strip() or selected_region != "كل المناطق":
+                if not filtered_df.empty:
+                    unique_clients = filtered_df[['clean_code', c_name, region_col] if region_col else ['clean_code', c_name]].drop_duplicates(subset=['clean_code'])
 
-                    months_found = pharm_details['سنة_شهر'].unique().tolist()
-                    st.success(f"📊 تم العثور على مسحوبات للعميل في **{len(months_found)}** شهر/ملف: ({' ، '.join(months_found)})")
+                    pharmacy_options = []
+                    for _, row in unique_clients.iterrows():
+                        p_code_val = str(row.get('clean_code', '-'))
+                        p_name = row.get(c_name, 'بدون اسم')
+                        p_reg = str(row.get(region_col, 'غير محدد')) if region_col else '-'
 
-                    st.markdown("### 📦 سجل كافة مسحوبات العميل من جميع الشيتات بالكامل:")
-                    
-                    ordered_cols = [c for c in ['سنة_شهر', b_code, b_name, item_col, qty_col, addr_col] if c and c in pharm_details.columns]
-                    
-                    final_df_display = pharm_details[ordered_cols] if ordered_cols else pharm_details
-                    
-                    st.dataframe(final_df_display, use_container_width=True, hide_index=True)
+                        label = f"🔑 الكود: {p_code_val} | 🏥 {p_name} | 📍 المنطقة: {p_reg}"
+                        pharmacy_options.append((label, p_code_val, p_name))
 
-            else:
-                st.warning("❌ لم يتم العثور على نتائج تطابق كود العميل أو اسم الصيدلية المحدد.")
+                    st.write("")
+                    selected_choice = st.selectbox(
+                        "🎯 النتائج المطابقة (اختر العميل للنتائج التفصيلية):", 
+                        options=pharmacy_options, 
+                        format_func=lambda x: x[0]
+                    )
+
+                    if selected_choice:
+                        target_code = selected_choice[1]
+                        target_pharm_name = selected_choice[2]
+
+                        if target_code != '-' and target_code != '':
+                            pharm_details = df_dist[
+                                (df_dist['clean_code'] == target_code) |
+                                (df_dist[c_name] == target_pharm_name)
+                            ]
+                        else:
+                            pharm_details = df_dist[df_dist[c_name] == target_pharm_name]
+
+                        if 'سنة_شهر' in pharm_details.columns:
+                            pharm_details = pharm_details.sort_values(by=['سنة_شهر'], ascending=True)
+
+                        st.divider()
+                        st.subheader(f"📌 كارت البيانات للصيدلية: {target_pharm_name}")
+
+                        first_row = pharm_details.iloc[0]
+                        val_code = first_row.get('clean_code', '-')
+                        val_name = str(first_row.get(c_name, '-'))
+                        val_region = str(first_row.get(region_col, '-')) if region_col else '-'
+
+                        m1, m2, m3 = st.columns(3)
+                        
+                        with m1:
+                            st.caption("🔑 كود الصيدلية الثابت (اضغط للنسخ):")
+                            st.code(val_code, language=None)
+
+                        with m2:
+                            st.caption("🏥 اسم الصيدلية بالكامل:")
+                            st.code(val_name, language=None)
+
+                        with m3:
+                            st.caption("📍 المنطقة / المحافظة:")
+                            st.code(val_region, language=None)
+
+                        if addr_col and addr_col in first_row:
+                            val_addr = str(first_row.get(addr_col, '-'))
+                            st.caption("📍 العنوان التفصيلي (اضغط للنسخ):")
+                            st.code(val_addr, language=None)
+
+                        months_found = pharm_details['سنة_شهر'].unique().tolist()
+                        st.success(f"📊 تم العثور على مسحوبات للعميل في **{len(months_found)}** شهر/ملف: ({' ، '.join(months_found)})")
+
+                        st.markdown("### 📦 سجل كافة مسحوبات العميل من جميع الشيتات بالكامل:")
+                        
+                        display_cols = [c for c in ['سنة_شهر', b_code, b_name, item_col, qty_col, addr_col] if c and c in pharm_details.columns]
+                        st.dataframe(pharm_details[display_cols] if display_cols else pharm_details, use_container_width=True)
+
+                else:
+                    st.warning("❌ لم يتم العثور على نتائج تطابق كود العميل أو اسم الصيدلية المحدد.")
