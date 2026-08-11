@@ -36,17 +36,39 @@ def save_users(users):
 def is_excel_file(filename):
     return filename.lower().endswith(('.xlsx', '.xls'))
 
+# دالة ذكية لاكتشاف الصف الصحيح للـ Header برصد أعلى عدد مطابقات مع الأعمدة المتوقعة
 def read_excel_smart(file_path):
+    expected_headers = [
+        'date', 'invoice date', 'التاريخ',
+        'branch', 'branch code', 'branch name', 'كود الفرع', 'اسم الفرع', 'الفرع',
+        'supplier code', 'supplier name',
+        'item code', 'item name', 'mat. desc.', 'المنتج', 'اسم المنتج',
+        'brick', 'governorate name', 'governorate', 'المحافظة', 'المنطقة',
+        'territory name', 'territory', 'brick name',
+        'client', 'client code', 'client name', 'customer', 'customer code', 'customer name', 
+        'اسم العميل', 'كود العميل', 'الصيدلية',
+        'quantity', 'qty', 'الكمية', 'value'
+    ]
+    
     df_temp = pd.read_excel(file_path, header=None, nrows=20)
-    header_row = 0
-
+    
+    best_header_row = 0
+    max_matches = 0
+    
     for idx, row in df_temp.iterrows():
-        row_str = row.astype(str).str.lower().to_string()
-        if any(k in row_str for k in ['customer', 'customer name', 'client', 'branch', 'mat. desc.', 'item name']):
-            header_row = idx
-            break
+        row_values = row.dropna().astype(str).str.lower().str.strip().tolist()
+        
+        matches_count = 0
+        for val in row_values:
+            clean_val = re.sub(r'\s+', ' ', val)
+            if any(clean_val == h or h in clean_val for h in expected_headers):
+                matches_count += 1
+        
+        if matches_count > max_matches and matches_count >= 3:
+            max_matches = matches_count
+            best_header_row = idx
 
-    df = pd.read_excel(file_path, header=header_row)
+    df = pd.read_excel(file_path, header=best_header_row)
     df.columns = df.columns.astype(str).str.strip()
     return df
 
@@ -69,17 +91,14 @@ def clean_code_val(val):
 def extract_year_month_from_filename(file_name):
     base_name = os.path.splitext(file_name)[0]
     
-    # البادئة القياسية (2026_02_اسم_الملف)
     m_prefix = re.match(r'^(\d{4})_(\d{1,2})', base_name)
     if m_prefix:
         y, m = int(m_prefix.group(1)), int(m_prefix.group(2))
         return f"{y}_{m:02d}"
 
-    # البحث عن السنة (4 أرقام)
     year_match = re.search(r'(20\d{2})', base_name)
     year = int(year_match.group(1)) if year_match else 2026
 
-    # أسماء الشهور بالعربية
     arabic_months = {
         'يناير': 1, 'فبراير': 2, 'مارس': 3, 'أبريل': 4, 'ابريل': 4,
         'مايو': 5, 'يونيو': 6, 'يوليو': 7, 'أغسطس': 8, 'اغسطس': 8,
@@ -89,7 +108,6 @@ def extract_year_month_from_filename(file_name):
         if month_name in base_name:
             return f"{year}_{m_num:02d}"
 
-    # أشكال مثل: 12-2025 أو 2-2026 أو 4-2026
     m_ym = re.search(r'(\d{1,2})\s*[-_]\s*(20\d{2})', base_name)
     if m_ym:
         m, y = int(m_ym.group(1)), int(m_ym.group(2))
@@ -100,7 +118,6 @@ def extract_year_month_from_filename(file_name):
         y, m = int(m_my.group(1)), int(m_my.group(2))
         return f"{y}_{m:02d}"
 
-    # أشكال مثل: فارما 9 أو فارما 7 أو فارما 3
     m_single = re.search(r'(?:شهر|\b)\s*(\d{1,2})\b', base_name)
     if m_single:
         m = int(m_single.group(1))
@@ -122,7 +139,6 @@ def load_distributor_data(folder_path):
         try:
             df = read_excel_smart(file_path)
             
-            # محاولة استخراج التاريخ أولاً من أعمدة التاريخ
             year_month = None
             date_col = next((c for c in df.columns if any(k in c.lower() for k in ['invoice date', 'date', 'التاريخ'])), None)
             
@@ -136,7 +152,6 @@ def load_distributor_data(folder_path):
                 except Exception:
                     year_month = None
             
-            # إذا لم يجد تاريخاً صالحاً في الأعمدة، يتجه لاستخراجه من اسم الملف
             if not year_month or year_month == "غير محدد":
                 year_month = extract_year_month_from_filename(file_name)
 
@@ -180,7 +195,7 @@ def audit_uploaded_files():
 
     return total_files_checked, audit_results
 
-# تهيئة الجلسة - إلغاء تسجيل الدخول مؤقتاً بالافتراض المباشر True
+# تهيئة الجلسة
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = True
 if 'user_info' not in st.session_state:
@@ -204,7 +219,7 @@ def clear_region():
     st.session_state['selected_region_key'] = "كل المناطق"
 
 # ==========================================
-# 🏠 النظام الأساسي (مباشر بدون صفحة تسجيل دخول)
+# 🏠 النظام الأساسي
 # ==========================================
 user = st.session_state['user_info']
 
@@ -384,14 +399,14 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
         
         c_code = next((c for c in cols if c.strip().lower() in ['customer', 'client code', 'كود العميل', 'customer code']), None)
         c_name = next((c for c in cols if c.strip().lower() in ['customer name', 'client name', 'اسم العميل', 'الصيدلية']), cols[0])
-        region_col = next((c for c in cols if c.strip().lower() in ['sal. dist. desc.', 'governorate', 'المحافظة', 'المنطقة']), None)
+        region_col = next((c for c in cols if c.strip().lower() in ['sal. dist. desc.', 'governorate', 'governorate name', 'المحافظة', 'المنطقة']), None)
         
         b_code = next((c for c in cols if c.strip().lower() in ['branch', 'branch code', 'كود الفرع']), None)
         b_name = next((c for c in cols if c.strip().lower() in ['branch name', 'اسم الفرع', 'الفرع']), None)
         
         item_col = next((c for c in cols if c.strip().lower() in ['mat. desc.', 'item name', 'المنتج']), None)
         qty_col = next((c for c in cols if c.strip().lower() in ['qty', 'quantity', 'الكمية']), None)
-        addr_col = next((c for c in cols if c.strip().lower() in ['customer address', 'address_en', 'العنوان']), None)
+        addr_col = next((c for c in cols if c.strip().lower() in ['customer address', 'address_en', 'address_ar', 'العنوان']), None)
 
         df_dist[c_name] = df_dist[c_name].astype(str).str.strip()
         
@@ -526,12 +541,10 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
 
                     st.markdown("### 📦 سجل كافة مسحوبات العميل من جميع الشيتات بالكامل:")
                     
-                    # ترتيب الأعمدة: سنة_شهر كـ أول عمود، وتطبيق hide_index لإزالة أرقام Index العشوائية
                     ordered_cols = [c for c in ['سنة_شهر', b_code, b_name, item_col, qty_col, addr_col] if c and c in pharm_details.columns]
                     
                     final_df_display = pharm_details[ordered_cols] if ordered_cols else pharm_details
                     
-                    # عرض الجدول بدون عمود الأرقام العشوائية (hide_index=True)
                     st.dataframe(final_df_display, use_container_width=True, hide_index=True)
 
             else:
