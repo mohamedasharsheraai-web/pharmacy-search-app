@@ -7,149 +7,57 @@ import pandas as pd
 # إعدادات الصفحة
 st.set_page_config(page_title="نظام بحث الصيدليات", page_icon="💊", layout="wide")
 
-# ===== UI V2: Modern visual layer (no business logic changes) =====
+# ===== UI V3: polished app-style interface =====
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Cairo', sans-serif !important;
-}
-
-[data-testid="stAppViewContainer"] {
-    background: #f5f7fb;
-}
-
-[data-testid="stHeader"] {
-    background: rgba(245,247,251,0.85);
-}
-
-.block-container {
-    max-width: 1250px;
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-}
-
-h1, h2, h3, h4 {
-    font-weight: 800 !important;
-    letter-spacing: -0.3px;
-}
-
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #102a43 0%, #163d5c 100%);
-}
-
-[data-testid="stSidebar"] * {
-    color: #ffffff !important;
-}
-
-[data-testid="stSidebar"] .stCaption {
-    color: #d9e8f5 !important;
-}
-
-.stButton > button {
-    border-radius: 12px !important;
-    border: 1px solid #dce3ec !important;
-    min-height: 46px !important;
-    font-weight: 700 !important;
-    transition: all .15s ease;
-    box-shadow: 0 2px 8px rgba(16,42,67,.06);
-}
-
-.stButton > button:hover {
-    transform: translateY(-1px);
-    border-color: #7aa7c7 !important;
-    box-shadow: 0 5px 14px rgba(16,42,67,.10);
-}
-
-[data-testid="stTextInput"] input,
-[data-testid="stSelectbox"] div[data-baseweb="select"] {
-    border-radius: 12px !important;
-}
-
-[data-testid="stTextInput"] input {
-    min-height: 46px;
-}
-
-[data-testid="stDataFrame"] {
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid #e3e8ef;
-}
-
-[data-testid="stVerticalBlockBorderWrapper"] {
-    border-radius: 16px !important;
-    border: 1px solid #e3e8ef !important;
-    background: #ffffff;
-    box-shadow: 0 4px 16px rgba(16,42,67,.05);
-}
-
-div[data-testid="stAlert"] {
-    border-radius: 12px !important;
-}
-
-.hero {
-    background: linear-gradient(135deg, #123b5d 0%, #176b87 100%);
-    border-radius: 22px;
-    padding: 30px 34px;
-    color: white;
-    margin-bottom: 26px;
-    box-shadow: 0 12px 30px rgba(18,59,93,.18);
-}
-
-.hero h1 {
-    margin: 0 0 8px 0;
-    color: white !important;
-    font-size: 2.1rem !important;
-}
-
-.hero p {
-    margin: 0;
-    color: #e6f2f7;
-    font-size: 1rem;
-}
-
-.section-title {
-    margin: 10px 0 14px 0;
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #17324d;
-}
-
-.metric-card {
-    background: white;
-    border: 1px solid #e4e9ef;
-    border-radius: 16px;
-    padding: 18px;
-    box-shadow: 0 4px 14px rgba(16,42,67,.05);
-}
-
-.metric-card .label {
-    color: #718096;
-    font-size: .88rem;
-}
-
-.metric-card .value {
-    color: #17324d;
-    font-size: 1.35rem;
-    font-weight: 800;
-    margin-top: 5px;
-}
-
-[data-testid="stExpander"] {
-    border-radius: 14px !important;
-    border: 1px solid #e1e7ee !important;
-    background: white;
-}
-
-@media (max-width: 768px) {
-    .block-container { padding: 1rem .7rem 2rem .7rem; }
-    .hero { padding: 22px; border-radius: 17px; }
-    .hero h1 { font-size: 1.55rem !important; }
-}
+:root{--navy:#102a43;--ink:#172b3a;--muted:#718096;--line:#e6ebf1;--bg:#f6f8fb;--accent:#1677a8;}
+html,body,[class*="css"]{font-family:'Cairo',sans-serif!important}
+[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 85% 0%,rgba(22,119,168,.07),transparent 28%),var(--bg)}
+[data-testid="stHeader"]{background:transparent!important}
+.block-container{max-width:1280px;padding:28px 34px 60px}
+h1,h2,h3,h4{font-family:'Cairo',sans-serif!important;color:var(--ink)!important;font-weight:800!important}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#0d263d 0%,#123a59 100%);border-right:1px solid rgba(255,255,255,.08)}
+[data-testid="stSidebar"]>div:first-child{padding-top:1.4rem}
+[data-testid="stSidebar"] *{font-family:'Cairo',sans-serif!important}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,[data-testid="stSidebar"] [data-testid="stCaptionContainer"]{color:#dce8f1!important}
+[data-testid="stSidebar"] .stButton>button{background:rgba(255,255,255,.07)!important;color:#fff!important;border:1px solid rgba(255,255,255,.09)!important;box-shadow:none!important;min-height:44px!important}
+[data-testid="stSidebar"] .stButton>button:hover{background:rgba(255,255,255,.14)!important;border-color:rgba(255,255,255,.18)!important;transform:none!important}
+[data-testid="stSidebar"] hr{border-color:rgba(255,255,255,.10)!important}
+.stButton>button{min-height:46px!important;border-radius:12px!important;border:1px solid #dbe3eb!important;background:#fff!important;color:#17324d!important;font-family:'Cairo',sans-serif!important;font-weight:700!important;box-shadow:0 2px 7px rgba(16,42,67,.04)!important;transition:.16s ease!important}
+.stButton>button:hover{border-color:#a8c4d6!important;box-shadow:0 7px 18px rgba(16,42,67,.09)!important;transform:translateY(-1px)}
+[data-testid="stTextInput"] label,[data-testid="stSelectbox"] label,[data-testid="stFileUploader"] label{color:#526678!important;font-weight:700!important}
+[data-testid="stTextInput"] input{min-height:52px!important;border-radius:14px!important;border:1px solid #d9e2ea!important;background:#fff!important;font-size:1rem!important;box-shadow:0 2px 10px rgba(16,42,67,.035)}
+[data-testid="stTextInput"] input:focus{border-color:#5c9fc2!important;box-shadow:0 0 0 3px rgba(22,119,168,.10)!important}
+[data-baseweb="select"]>div{min-height:50px!important;border-radius:13px!important;border-color:#d9e2ea!important}
+[data-testid="stDataFrame"]{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+[data-testid="stVerticalBlockBorderWrapper"]{border:1px solid var(--line)!important;border-radius:18px!important;background:#fff!important;box-shadow:0 6px 20px rgba(16,42,67,.045)!important}
+div[data-testid="stAlert"]{border-radius:13px!important}
+[data-testid="stExpander"]{border:1px solid var(--line)!important;border-radius:14px!important;background:#fff!important}
+.app-topbar{display:flex;justify-content:space-between;align-items:center;padding:4px 2px 20px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-icon{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1677a8,#0e8f83);color:#fff;font-size:22px;box-shadow:0 8px 18px rgba(22,119,168,.20)}
+.brand-title{font-size:1.15rem;font-weight:800;color:#17324d}.brand-sub{font-size:.78rem;color:#8795a4;margin-top:1px}
+.page-hero{position:relative;overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px 34px;margin-bottom:25px;box-shadow:0 10px 30px rgba(16,42,67,.055)}
+.page-hero:after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:rgba(22,119,168,.055);right:-90px;top:-120px}
+.hero-kicker{color:#1677a8;font-size:.82rem;font-weight:800;margin-bottom:5px}
+.hero-title{color:#152f46;font-size:2rem;font-weight:800;line-height:1.3;margin:0 0 7px}
+.hero-text{color:#718096;margin:0;font-size:.96rem}
+.section-label{color:#20384d;font-size:1rem;font-weight:800;margin:8px 0 13px}
+.dist-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:23px;min-height:205px;box-shadow:0 7px 22px rgba(16,42,67,.045)}
+.dist-icon{width:52px;height:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:25px;margin-bottom:14px;background:#edf6fa}
+.dist-title{font-size:1.16rem;font-weight:800;color:#17324d}.dist-desc{font-size:.84rem;color:#8492a0;margin:4px 0 18px}
+.stat-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px 18px;box-shadow:0 5px 16px rgba(16,42,67,.035)}
+.stat-label{color:#81909d;font-size:.78rem}.stat-value{color:#17324d;font-size:1.18rem;font-weight:800;margin-top:2px}
+.search-shell{background:#fff;border:1px solid var(--line);border-radius:20px;padding:22px 24px 16px;box-shadow:0 7px 22px rgba(16,42,67,.045);margin-bottom:18px}
+.result-card{background:#fff;border:1px solid var(--line);border-radius:17px;padding:18px 20px;box-shadow:0 5px 16px rgba(16,42,67,.035)}
+.pharmacy-head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.pharmacy-name{font-size:1.18rem;font-weight:800;color:#17324d}.pharmacy-meta{color:#7b8997;font-size:.84rem;margin-top:5px}
+.badge{display:inline-block;padding:5px 10px;border-radius:999px;background:#edf7f6;color:#137c72;font-size:.72rem;font-weight:800}
+@media(max-width:800px){.block-container{padding:18px 12px 40px}.page-hero{padding:23px 20px;border-radius:18px}.hero-title{font-size:1.55rem}}
 </style>
 """, unsafe_allow_html=True)
-# ===== END UI V2 =====
+# ===== END UI V3 =====
+
 
 
 USER_DB_FILE = "users.json"
@@ -428,40 +336,59 @@ else:
     # --- الرئيسية ---
     if st.session_state['current_page'] == 'welcome':
         st.markdown(f"""
-        <div class="hero" dir="rtl">
-            <h1>👋 أهلاً بك يا {user['name']}</h1>
-            <p>نظام البحث وإدارة بيانات الصيدليات — اختر قاعدة البيانات للبدء.</p>
+        <div class="app-topbar" dir="rtl">
+            <div class="brand">
+                <div class="brand-icon">💊</div>
+                <div>
+                    <div class="brand-title">Pharma Search</div>
+                    <div class="brand-sub">نظام البحث وإدارة بيانات الصيدليات</div>
+                </div>
+            </div>
+        </div>
+        <div class="page-hero" dir="rtl">
+            <div class="hero-kicker">لوحة التحكم الرئيسية</div>
+            <div class="hero-title">أهلاً بك، {user['name']} 👋</div>
+            <p class="hero-text">اختر قاعدة البيانات التي تريد البحث فيها للوصول السريع إلى بيانات الصيدليات والمسحوبات.</p>
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown('<div class="section-title" dir="rtl">اختر الموزع</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label" dir="rtl">قواعد البيانات</div>', unsafe_allow_html=True)
 
         c1, c2 = st.columns(2, gap="large")
         with c1:
-            with st.container(border=True):
-                st.markdown("""
-                <div dir="rtl" style="padding:8px 4px 12px 4px;">
-                    <div style="font-size:2rem;">🏢</div>
-                    <div style="font-size:1.25rem;font-weight:800;color:#17324d;">ابن سينا</div>
-                    <div style="color:#718096;margin:4px 0 14px;">البحث في قاعدة بيانات ابن سينا</div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("فتح قاعدة ابن سينا  →", key="home_ibnsina", use_container_width=True):
-                    st.session_state['current_page'] = 'ibnsina'
-                    st.rerun()
+            st.markdown("""
+            <div class="dist-card" dir="rtl">
+                <div class="dist-icon">🏢</div>
+                <div class="dist-title">ابن سينا</div>
+                <div class="dist-desc">البحث في قاعدة بيانات العملاء والمسحوبات.</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("فتح قاعدة ابن سينا  →", key="home_ibnsina", use_container_width=True):
+                st.session_state['current_page'] = 'ibnsina'
+                st.rerun()
 
         with c2:
-            with st.container(border=True):
-                st.markdown("""
-                <div dir="rtl" style="padding:8px 4px 12px 4px;">
-                    <div style="font-size:2rem;">📦</div>
-                    <div style="font-size:1.25rem;font-weight:800;color:#17324d;">فارما أوفيرسيز</div>
-                    <div style="color:#718096;margin:4px 0 14px;">البحث في قاعدة بيانات فارما</div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("فتح قاعدة فارما  →", key="home_pharma", use_container_width=True):
-                    st.session_state['current_page'] = 'pharma'
-                    st.rerun()
+            st.markdown("""
+            <div class="dist-card" dir="rtl">
+                <div class="dist-icon">📦</div>
+                <div class="dist-title">فارما أوفيرسيز</div>
+                <div class="dist-desc">البحث في قاعدة بيانات العملاء والمسحوبات.</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("فتح قاعدة فارما  →", key="home_pharma", use_container_width=True):
+                st.session_state['current_page'] = 'pharma'
+                st.rerun()
+
+        st.write("")
+        st.markdown('<div class="section-label" dir="rtl">نظرة سريعة</div>', unsafe_allow_html=True)
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            st.markdown('<div class="stat-card" dir="rtl"><div class="stat-label">النظام</div><div class="stat-value">جاهز للبحث</div></div>', unsafe_allow_html=True)
+        with s2:
+            st.markdown('<div class="stat-card" dir="rtl"><div class="stat-label">قواعد البيانات</div><div class="stat-value">2 موزعين</div></div>', unsafe_allow_html=True)
+        with s3:
+            st.markdown(f'<div class="stat-card" dir="rtl"><div class="stat-label">الحساب الحالي</div><div class="stat-value">{user["name"]}</div></div>', unsafe_allow_html=True)
+
 
     elif st.session_state['current_page'] == 'upload_select_distributor':
         st.header("📁 إدارة مكتبة الشيتات - اختر الموزع")
@@ -574,9 +501,19 @@ else:
                 st.rerun()
 
         st.markdown(f"""
-        <div class="hero" dir="rtl">
-            <h1>🔍 البحث في قاعدة بيانات {dist_title}</h1>
-            <p>ابحث باسم الصيدلية أو كود العميل، ثم اختر النتيجة لعرض كامل سجل المسحوبات.</p>
+        <div class="app-topbar" dir="rtl">
+            <div class="brand">
+                <div class="brand-icon">💊</div>
+                <div>
+                    <div class="brand-title">Pharma Search</div>
+                    <div class="brand-sub">{dist_title}</div>
+                </div>
+            </div>
+        </div>
+        <div class="page-hero" dir="rtl">
+            <div class="hero-kicker">قاعدة بيانات {dist_title}</div>
+            <div class="hero-title">ابحث عن الصيدلية بسرعة</div>
+            <p class="hero-text">اكتب اسم الصيدلية أو كود العميل للوصول إلى بياناتها وسجل المسحوبات.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -612,7 +549,7 @@ else:
             if region_col and region_col in df_dist.columns:
                 df_dist[region_col] = df_dist[region_col].astype(str).str.strip()
 
-            st.markdown("### 🔍 أدوات تصفية البحث:")
+            st.markdown('<div class="search-shell" dir="rtl"><div class="section-label">البحث والتصفية</div>', unsafe_allow_html=True)
             c_inp, c_clr_inp, c_reg, c_clr_reg = st.columns([3, 0.4, 2.6, 0.4])
 
             with c_inp:
@@ -647,6 +584,7 @@ else:
                 st.write("")
                 st.write("")
                 st.button("❌", key="btn_clr_region", on_click=clear_region, help="مسح المنطقة وإرجاع الكل")
+            st.markdown("</div>", unsafe_allow_html=True)
 
             filtered_df = df_dist.copy()
 
@@ -700,7 +638,7 @@ else:
                             pharm_details = pharm_details.sort_values(by=['سنة_شهر'], ascending=True)
 
                         st.divider()
-                        st.subheader(f"📌 كارت البيانات للصيدلية: {target_pharm_name}")
+                        st.markdown(f'<div class="result-card" dir="rtl"><div class="pharmacy-head"><div><div class="pharmacy-name">🏥 {target_pharm_name}</div><div class="pharmacy-meta">بطاقة بيانات العميل وسجل المسحوبات</div></div><span class="badge">عميل</span></div></div>', unsafe_allow_html=True)
 
                         first_row = pharm_details.iloc[0]
                         val_code = first_row.get('clean_code', '-')
