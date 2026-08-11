@@ -5,15 +5,16 @@ import streamlit as st
 import pandas as pd
 
 # إعدادات الصفحة
-st.set_page_config(page_title="نظام بحث الصيدليات", page_icon="💊", layout="wide")
+st.set_page_config(page_title="نظام بحث الصيدليات والمبيعات", page_icon="💊", layout="wide")
 
 USER_DB_FILE = "users.json"
 DATA_FOLDER = "data"
 
 IBNSINA_FOLDER = os.path.join(DATA_FOLDER, "ibnsina")
 PHARMA_FOLDER = os.path.join(DATA_FOLDER, "pharma")
+SALES_FOLDER = os.path.join(DATA_FOLDER, "sales_reports")
 
-for folder in [DATA_FOLDER, IBNSINA_FOLDER, PHARMA_FOLDER]:
+for folder in [DATA_FOLDER, IBNSINA_FOLDER, PHARMA_FOLDER, SALES_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
@@ -32,11 +33,9 @@ def save_users(users):
     with open(USER_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(users, f, ensure_ascii=False, indent=4)
 
-# 1. دالة موحدة للتحقق من ملفات إكسيل بدون الحساسية لحالة الأحرف (.xlsx, .XLSX, .xls, .XLS)
 def is_excel_file(filename):
     return filename.lower().endswith(('.xlsx', '.xls'))
 
-# دالة ذكية لاكتشاف الصف الصحيح للـ Header برصد أعلى عدد مطابقات مع الأعمدة المتوقعة
 def read_excel_smart(file_path):
     expected_headers = [
         'date', 'invoice date', 'التاريخ',
@@ -72,7 +71,6 @@ def read_excel_smart(file_path):
     df.columns = df.columns.astype(str).str.strip()
     return df
 
-# دالة تنظيف الكود وحذف الأصفار من على الشمال
 def clean_code_val(val):
     if pd.isna(val) or str(val).strip() in ['nan', 'None', '-', '']:
         return '-'
@@ -87,7 +85,6 @@ def clean_code_val(val):
     clean_code = val_str.lstrip('0')
     return clean_code if clean_code else '0'
 
-# دالة استخراج السنة والشهر من اسم الملف
 def extract_year_month_from_filename(file_name):
     base_name = os.path.splitext(file_name)[0]
     
@@ -133,12 +130,10 @@ def load_distributor_data(folder_path):
         return None
     
     dataframes = []
-    
     for file_path in files:
         file_name = os.path.basename(file_path)
         try:
             df = read_excel_smart(file_path)
-            
             year_month = None
             date_col = next((c for c in df.columns if any(k in c.lower() for k in ['invoice date', 'date', 'التاريخ'])), None)
             
@@ -165,6 +160,53 @@ def load_distributor_data(folder_path):
         full_df = pd.concat(dataframes, ignore_index=True)
         return full_df.sort_values(by=['سنة_شهر'], ascending=True)
     return None
+
+# دالة قراءة شيتات المبيعات المجمعة ومعالجة القيم الفارغة بـ 0
+@st.cache_data(ttl=600)
+def load_sales_matrix_data():
+    files = [os.path.join(SALES_FOLDER, f) for f in os.listdir(SALES_FOLDER) if is_excel_file(f)]
+    if not files:
+        return None, [], []
+    
+    dfs = []
+    file_names = []
+    for f in files:
+        fname = os.path.basename(f)
+        try:
+            raw_df = pd.read_excel(f, header=None, nrows=15)
+            header_idx = 0
+            for idx, r in raw_df.iterrows():
+                row_str = " ".join(r.dropna().astype(str).str.lower().tolist())
+                if any(k in row_str for k in ['division name', 'division', 'المنطقة', 'mr name', 'employee']):
+                    header_idx = idx
+                    break
+            
+            df = pd.read_excel(f, header=header_idx)
+            df.columns = [str(c).strip() for c in df.columns]
+            
+            # إخفاء/حذف عمود الأسماء إن وجد
+            mr_cols = [c for c in df.columns if 'mr name' in c.lower() or 'اسم المندوب' in c.lower()]
+            if mr_cols:
+                df = df.drop(columns=mr_cols)
+
+            ym_val = extract_year_month_from_filename(fname)
+            df['سنة_شهر'] = ym_val
+            df['مصدر_الملف'] = fname
+            dfs.append(df)
+            file_names.append(fname)
+        except Exception:
+            continue
+
+    if dfs:
+        full_sales_df = pd.concat(dfs, ignore_index=True)
+        
+        # استبدال أي قيم فارغة رقمية بالرقم 0
+        num_cols = full_sales_df.select_dtypes(include=['number']).columns
+        full_sales_df[num_cols] = full_sales_df[num_cols].fillna(0)
+        
+        available_yms = sorted(full_sales_df['سنة_شهر'].unique().tolist())
+        return full_sales_df.sort_values(by=['سنة_شهر'], ascending=True), sorted(file_names), available_yms
+    return None, [], []
 
 def audit_uploaded_files():
     audit_results = []
@@ -202,8 +244,12 @@ if 'user_info' not in st.session_state:
     st.session_state['user_info'] = {"phone": "01000000000", "name": "المدير العام", "role": "admin"}
 if 'current_page' not in st.session_state:
     st.session_state['current_page'] = 'welcome'
+if 'show_pharmacy_search_opts' not in st.session_state:
+    st.session_state['show_pharmacy_search_opts'] = False
 if 'selected_year' not in st.session_state:
     st.session_state['selected_year'] = 2026
+if 'selected_sales_year' not in st.session_state:
+    st.session_state['selected_sales_year'] = 2026
 if 'selected_upload_dist' not in st.session_state:
     st.session_state['selected_upload_dist'] = None
 
@@ -211,15 +257,21 @@ if 'search_query' not in st.session_state:
     st.session_state['search_query'] = ""
 if 'selected_region_key' not in st.session_state:
     st.session_state['selected_region_key'] = "كل المناطق"
+if 'trigger_search' not in st.session_state:
+    st.session_state['trigger_search'] = False
+if 'show_sales_results' not in st.session_state:
+    st.session_state['show_sales_results'] = False
 
 def clear_search():
     st.session_state['search_query'] = ""
+    st.session_state['trigger_search'] = False
 
 def clear_region():
     st.session_state['selected_region_key'] = "كل المناطق"
+    st.session_state['trigger_search'] = False
 
 # ==========================================
-# 🏠 النظام الأساسي
+# 🏠 القائمة الجانبية
 # ==========================================
 user = st.session_state['user_info']
 
@@ -229,6 +281,9 @@ with st.sidebar:
     
     if st.button("الرئيسية 🏠", use_container_width=True):
         st.session_state['current_page'] = 'welcome'
+        st.session_state['show_pharmacy_search_opts'] = False
+        st.session_state['trigger_search'] = False
+        st.session_state['show_sales_results'] = False
         st.rerun()
 
     if user['role'] == 'admin':
@@ -250,35 +305,210 @@ with st.sidebar:
                 else:
                     st.warning("يرجى ملء جميع البيانات.")
 
-        if st.button("📁 ارفع ملفاتك (إدارة المكتبة)", use_container_width=True):
+        if st.button("📁 ارفع ملفات الصيدليات (المكتبة)", use_container_width=True):
             st.session_state['current_page'] = 'upload_select_distributor'
+            st.session_state['show_pharmacy_search_opts'] = False
+            st.session_state['trigger_search'] = False
+            st.session_state['show_sales_results'] = False
+            st.rerun()
+
+        if st.button("📊 ارفع شيتات المبيعات (التقرير المجمع)", use_container_width=True):
+            st.session_state['current_page'] = 'upload_sales_matrix'
+            st.session_state['show_pharmacy_search_opts'] = False
+            st.session_state['show_sales_results'] = False
             st.rerun()
 
         if st.button("🔍 فحص سلامة الشيتات المرفوعة", use_container_width=True):
             st.session_state['current_page'] = 'health_check'
+            st.session_state['show_pharmacy_search_opts'] = False
+            st.session_state['trigger_search'] = False
+            st.session_state['show_sales_results'] = False
             st.rerun()
 
     st.markdown("---")
 
-# --- الرئيسية ---
+# ==========================================
+# 🏠 عرض الصفحات
+# ==========================================
+
+# 1. الشاشة الرئيسية
 if st.session_state['current_page'] == 'welcome':
     st.markdown(f"<h1 style='text-align: center;'>👋 أهلاً بك يا {user['name']}</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center; color: gray;'>اختر الموزع للبدء في عملية البحث</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: gray;'>اختر القسم المطلوب للبدء</h4>", unsafe_allow_html=True)
     st.write("")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("---")
-        if st.button("🏢 البحث في ابن سينا", use_container_width=True):
-            st.session_state['current_page'] = 'ibnsina'
+    col_left, col_center, col_right = st.columns([1, 2, 1])
+
+    with col_center:
+        if st.button("🔍 بحث أكواد وتفاصيل الصيدليات", use_container_width=True):
+            st.session_state['show_pharmacy_search_opts'] = not st.session_state['show_pharmacy_search_opts']
             st.rerun()
 
-    with c2:
+        if st.session_state.get('show_pharmacy_search_opts', False):
+            if st.button("🏢 البحث في ابن سينا", use_container_width=True):
+                st.session_state['current_page'] = 'ibnsina'
+                st.session_state['show_pharmacy_search_opts'] = False
+                st.session_state['trigger_search'] = False
+                st.rerun()
+
+            if st.button("📦 البحث في فارما", use_container_width=True):
+                st.session_state['current_page'] = 'pharma'
+                st.session_state['show_pharmacy_search_opts'] = False
+                st.session_state['trigger_search'] = False
+                st.rerun()
+
         st.markdown("---")
-        if st.button("📦 البحث في فارما", use_container_width=True):
-            st.session_state['current_page'] = 'pharma'
+        if st.button("📊 استعرض المبيعات والتقارير", use_container_width=True):
+            st.session_state['current_page'] = 'sales_matrix_view'
+            st.session_state['show_sales_results'] = False
             st.rerun()
 
+        st.markdown("---")
+        st.button("⚙️ خيار مستقبلي 2 (قريباً)", use_container_width=True, disabled=True)
+        st.markdown("---")
+        st.button("⚙️ خيار مستقبلي 3 (قريباً)", use_container_width=True, disabled=True)
+
+# 2. صفحة رفع شيتات المبيعات المجمعة كتقويم (Sales Matrix Upload Calendar)
+elif st.session_state['current_page'] == 'upload_sales_matrix':
+    st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
+    st.header("🗓️ تقويم رفع شيتات المبيعات المجمعة (Sales Matrix)")
+
+    col_y1, col_y2, col_y3 = st.columns([1, 2, 1])
+    with col_y1:
+        if st.button("◀️ السنة السابقة", key="btn_sales_prev_yr"):
+            st.session_state['selected_sales_year'] -= 1
+            st.rerun()
+    with col_y2:
+        st.markdown(f"<h3 style='text-align: center;'>سنة {st.session_state['selected_sales_year']}</h3>", unsafe_allow_html=True)
+    with col_y3:
+        if st.button("السنة القادمة ▶️", key="btn_sales_next_yr"):
+            st.session_state['selected_sales_year'] += 1
+            st.rerun()
+
+    st.divider()
+
+    months = [
+        "01 - يناير", "02 - فبراير", "03 - مارس", "04 - أبريل", 
+        "05 - مايو", "06 - يونيو", "07 - يوليو", "08 - أغسطس", 
+        "09 - سبتمبر", "10 - أكتوبر", "11 - نوفمبر", "12 - ديسمبر"
+    ]
+
+    for idx in range(0, 12, 3):
+        cols = st.columns(3)
+        for j in range(3):
+            m_idx = idx + j
+            if m_idx < 12:
+                month_str = months[m_idx]
+                year_val = st.session_state['selected_sales_year']
+                file_prefix = f"{year_val}_{m_idx+1:02d}"
+
+                existing_files = [f for f in os.listdir(SALES_FOLDER) if is_excel_file(f) and (f.startswith(file_prefix) or extract_year_month_from_filename(f) == file_prefix)]
+
+                with cols[j]:
+                    with st.container(border=True):
+                        st.subheader(month_str)
+
+                        if existing_files:
+                            current_file = existing_files[0]
+                            st.success(f"📄 {current_file}")
+                            if st.button(f"❌ مسح ملف {month_str}", key=f"del_sales_{file_prefix}"):
+                                os.remove(os.path.join(SALES_FOLDER, current_file))
+                                st.cache_data.clear()
+                                st.success("تم الحذف!")
+                                st.rerun()
+                        else:
+                            st.info("لا يوجد شيت مرفوع")
+                            new_file = st.file_uploader(f"رفع شيت {month_str}:", type=["xlsx", "xls", "XLSX", "XLS"], key=f"up_sales_{file_prefix}")
+                            if new_file:
+                                save_name = f"{file_prefix}_{new_file.name}"
+                                with open(os.path.join(SALES_FOLDER, save_name), "wb") as f:
+                                    f.write(new_file.getbuffer())
+                                st.cache_data.clear()
+                                st.success("تم الرفع بنجاح!")
+                                st.rerun()
+
+# 3. صفحة استعراض تقارير المبيعات
+elif st.session_state['current_page'] == 'sales_matrix_view':
+    st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
+    st.header("📊 شاشة استعراض وتقارير المبيعات")
+
+    df_sales, sales_files, available_yms = load_sales_matrix_data()
+
+    if df_sales is None or df_sales.empty:
+        st.warning("لا توجد شيتات تقارير مبيعات مرفوعة حالياً. برجاء الذهاب لـ 'ارفع شيتات المبيعات' من القائمة الجانبية أولاً.")
+    else:
+        cols = list(df_sales.columns)
+        div_col = next((c for c in cols if 'division' in c.lower() or 'المنطقة' in c.lower()), cols[0])
+
+        st.markdown("### 🔍 أدوات التصفية والفلترة:")
+        
+        all_divisions = ["كل المناطق"]
+        if div_col in df_sales.columns:
+            raw_divs = df_sales[div_col].dropna().astype(str).unique().tolist()
+            clean_divs = sorted([d for d in raw_divs if d and d != '-'])
+            all_divisions.extend(clean_divs)
+
+        selected_division = st.selectbox(
+            "📍 اختر المنطقة (ابحث واكتب ليظهر لك الخيار):",
+            options=all_divisions,
+            index=0
+        )
+
+        st.write("")
+
+        c_from, c_to = st.columns(2)
+
+        with c_from:
+            date_from = st.selectbox(
+                "📅 من تاريخ (سنة_شهر):",
+                options=["بداية الفترة"] + available_yms,
+                index=0
+            )
+
+        with c_to:
+            date_to = st.selectbox(
+                "📅 إلى تاريخ (سنة_شهر):",
+                options=["نهاية الفترة"] + available_yms,
+                index=0
+            )
+
+        st.write("")
+        if st.button("📊 إظهار النتائج", use_container_width=True, key="btn_show_sales_table"):
+            st.session_state['show_sales_results'] = True
+
+        st.divider()
+
+        # عرض النتائج في جدول مجمع عند الضغط على زر "إظهار النتائج"
+        if st.session_state.get('show_sales_results', False):
+            res_df = df_sales.copy()
+
+            # 1. الفلترة حسب المنطقة
+            if selected_division != "كل المناطق":
+                res_df = res_df[res_df[div_col].astype(str) == selected_division]
+
+            # 2. الفلترة حسب نطاق التواريخ
+            if date_from != "بداية الفترة":
+                res_df = res_df[res_df['سنة_شهر'] >= date_from]
+            if date_to != "نهاية الفترة":
+                res_df = res_df[res_df['سنة_شهر'] <= date_to]
+
+            if res_df.empty:
+                st.warning("⚠️ لا توجد نتائج تطابق خيارات الفلترة المحددة.")
+            else:
+                st.subheader(f"📋 نتائج التقرير للمنطقة: {selected_division}")
+
+                # استبعاد الأعمدة الفنية
+                exclude_cols = ['مصدر_الملف', 'clean_code']
+                display_cols = [c for c in res_df.columns if c not in exclude_cols]
+                
+                final_sales_table = res_df[display_cols].copy()
+                
+                # استبدال أي خانة فارغة أو جديدة بالرقم 0
+                final_sales_table = final_sales_table.fillna(0)
+                
+                st.dataframe(final_sales_table, use_container_width=True, hide_index=True)
+
+# 4. باقي الصفحات
 elif st.session_state['current_page'] == 'upload_select_distributor':
     st.header("📁 إدارة مكتبة الشيتات - اختر الموزع")
     col_ibn, col_ph = st.columns(2)
@@ -354,9 +584,8 @@ elif st.session_state['current_page'] == 'upload_calendar':
                                 st.success("تم الرفع بنجاح!")
                                 st.rerun()
 
-# --- شاشة فحص سلامة الملفات ---
 elif st.session_state['current_page'] == 'health_check':
-    st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
+    st.button("⬅️ العودة للرئيسية", on_click=lambda: (st.session_state.update({'current_page': 'welcome', 'show_pharmacy_search_opts': False, 'trigger_search': False, 'show_sales_results': False})))
     st.header("🔍 نتيجة فحص سلامة وقراءة الشيتات المرفوعة")
     st.write("يقوم النظام بمسح وفحص كافة شيتات الإكسيل المرفوعة للتيقن من سلامة قراءتها في قواعد البيانات:")
 
@@ -374,7 +603,6 @@ elif st.session_state['current_page'] == 'health_check':
         for dist, fname, issue in errors:
             st.error(f"🏢 **الموزع:** {dist} | 📄 **الملف:** `{fname}` 👈 **المشكلة:** {issue}")
 
-# --- شاشة البحث ---
 elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
     dist_code = st.session_state['current_page']
     dist_title = "ابن سينا" if dist_code == 'ibnsina' else "فارما أوفيرسيز"
@@ -382,7 +610,7 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
 
     c_top1, c_top2 = st.columns([4, 1])
     with c_top1:
-        st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
+        st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome', 'show_pharmacy_search_opts': False, 'trigger_search': False, 'show_sales_results': False}))
     with c_top2:
         if st.button("🔄 تحديث البيانات", help="اضغط هنا لإلغاء أي ذاكرة مؤقتة وتطبيق القواعد الجديدة"):
             st.cache_data.clear()
@@ -393,7 +621,7 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
     df_dist = load_distributor_data(target_folder)
 
     if df_dist is None or df_dist.empty:
-        st.warning(f"لا توجد شيتات مرفوعة حالياً في مكتبة {dist_title}. برجاء الذهاب لـ 'ارفع ملفاتك' ورفع الشيتات أولاً.")
+        st.warning(f"لا توجد شيتات مرفوعة حالياً في مكتبة {dist_title}. برجاء الذهاب لـ 'ارفع ملفات الصيدليات' ورفع الشيتات أولاً.")
     else:
         cols = list(df_dist.columns)
         
@@ -423,58 +651,60 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
             df_dist[region_col] = df_dist[region_col].astype(str).str.strip()
 
         st.markdown("### 🔍 أدوات تصفية البحث:")
-        c_inp, c_clr_inp, c_reg, c_clr_reg = st.columns([3, 0.4, 2.6, 0.4])
+        
+        box_left, box_center, box_right = st.columns([1, 2, 1])
 
-        with c_inp:
-            name_query = st.text_input(
-                "1. اكتب كود العميل (أو الاسم):", 
-                key="search_query", 
-                placeholder="مثال: 1522888 / شوكت"
-            )
+        with box_center:
+            col_r1_inp, col_r1_btn = st.columns([5, 1])
+            with col_r1_inp:
+                name_query = st.text_input(
+                    label="", 
+                    key="search_query", 
+                    placeholder="مثال: 1522888 / شوكت"
+                )
+            with col_r1_btn:
+                st.button("❌", key="btn_clr_search", on_click=clear_search, help="مسح خانة البحث", use_container_width=True)
 
-        with c_clr_inp:
+            col_r2_inp, col_r2_btn = st.columns([5, 1])
+            with col_r2_inp:
+                available_regions = ["كل المناطق"]
+                if region_col and region_col in df_dist.columns:
+                    raw_regs = df_dist[region_col].dropna().unique().tolist()
+                    clean_regs = sorted([r for r in raw_regs if r and r.lower() != 'nan'])
+                    available_regions.extend(clean_regs)
+
+                if st.session_state['selected_region_key'] not in available_regions:
+                    st.session_state['selected_region_key'] = "كل المناطق"
+
+                selected_region = st.selectbox(
+                    label="", 
+                    options=available_regions,
+                    key="selected_region_key"
+                )
+            with col_r2_btn:
+                st.button("❌", key="btn_clr_region", on_click=clear_region, help="مسح المنطقة وإرجاع الكل", use_container_width=True)
+
             st.write("")
-            st.write("")
-            st.button("❌", key="btn_clr_search", on_click=clear_search, help="مسح خانة البحث")
-
-        with c_reg:
-            available_regions = ["كل المناطق"]
-            if region_col and region_col in df_dist.columns:
-                raw_regs = df_dist[region_col].dropna().unique().tolist()
-                clean_regs = sorted([r for r in raw_regs if r and r.lower() != 'nan'])
-                available_regions.extend(clean_regs)
-
-            if st.session_state['selected_region_key'] not in available_regions:
-                st.session_state['selected_region_key'] = "كل المناطق"
-
-            selected_region = st.selectbox(
-                "2. اختر المنطقة (تخمين أوتوماتيكي من الشيتات):", 
-                options=available_regions,
-                key="selected_region_key"
-            )
-
-        with c_clr_reg:
-            st.write("")
-            st.write("")
-            st.button("❌", key="btn_clr_region", on_click=clear_region, help="مسح المنطقة وإرجاع الكل")
+            if st.button("🔍 بحث", use_container_width=True, key="btn_do_search"):
+                st.session_state['trigger_search'] = True
 
         filtered_df = df_dist.copy()
 
-        if region_col and selected_region != "كل المناطق":
-            filtered_df = filtered_df[filtered_df[region_col] == selected_region]
+        if st.session_state.get('trigger_search', False) or name_query.strip() or selected_region != "كل المناطق":
+            if region_col and selected_region != "كل المناطق":
+                filtered_df = filtered_df[filtered_df[region_col] == selected_region]
 
-        if name_query.strip():
-            q_clean = name_query.strip().lstrip('0')
-            mask = pd.Series(False, index=filtered_df.index)
-            
-            if c_name in filtered_df.columns:
-                mask = mask | filtered_df[c_name].str.contains(name_query.strip(), case=False, na=False, regex=False)
-            if 'clean_code' in filtered_df.columns:
-                mask = mask | filtered_df['clean_code'].str.contains(q_clean, case=False, na=False, regex=False)
-            
-            filtered_df = filtered_df[mask]
+            if name_query.strip():
+                q_clean = name_query.strip().lstrip('0')
+                mask = pd.Series(False, index=filtered_df.index)
+                
+                if c_name in filtered_df.columns:
+                    mask = mask | filtered_df[c_name].str.contains(name_query.strip(), case=False, na=False, regex=False)
+                if 'clean_code' in filtered_df.columns:
+                    mask = mask | filtered_df['clean_code'].str.contains(q_clean, case=False, na=False, regex=False)
+                
+                filtered_df = filtered_df[mask]
 
-        if name_query.strip() or selected_region != "كل المناطق":
             if not filtered_df.empty:
                 unique_clients = filtered_df[['clean_code', c_name, region_col] if region_col else ['clean_code', c_name]].drop_duplicates(subset=['clean_code'])
 
@@ -536,11 +766,32 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
                         st.caption("📍 العنوان التفصيلي (اضغط للنسخ):")
                         st.code(val_addr, language=None)
 
-                    months_found = pharm_details['سنة_شهر'].unique().tolist()
-                    st.success(f"📊 تم العثور على مسحوبات للعميل في **{len(months_found)}** شهر/ملف: ({' ، '.join(months_found)})")
-
                     st.markdown("### 📦 سجل كافة مسحوبات العميل من جميع الشيتات بالكامل:")
                     
+                    st.markdown("**⚡ أدوات تصفية الجدول:**")
+                    f_col1, f_col2, f_col3 = st.columns(3)
+
+                    with f_col1:
+                        if 'سنة_شهر' in pharm_details.columns:
+                            all_ym = sorted(pharm_details['سنة_شهر'].dropna().unique().tolist())
+                            sel_ym = st.multiselect("📅 فلترة التاريخ (سنة_شهر):", options=all_ym, default=[])
+                            if sel_ym:
+                                pharm_details = pharm_details[pharm_details['سنة_شهر'].isin(sel_ym)]
+
+                    with f_col2:
+                        if b_name and b_name in pharm_details.columns:
+                            all_branches = sorted(pharm_details[b_name].dropna().unique().tolist())
+                            sel_branches = st.multiselect("🏢 فلترة الفرع (Branch):", options=all_branches, default=[])
+                            if sel_branches:
+                                pharm_details = pharm_details[pharm_details[b_name].isin(sel_branches)]
+
+                    with f_col3:
+                        if item_col and item_col in pharm_details.columns:
+                            all_items = sorted(pharm_details[item_col].dropna().astype(str).unique().tolist())
+                            sel_items = st.multiselect("💊 فلترة المنتج (Item Name):", options=all_items, default=[])
+                            if sel_items:
+                                pharm_details = pharm_details[pharm_details[item_col].astype(str).isin(sel_items)]
+
                     ordered_cols = [c for c in ['سنة_شهر', b_code, b_name, item_col, qty_col, addr_col] if c and c in pharm_details.columns]
                     
                     final_df_display = pharm_details[ordered_cols] if ordered_cols else pharm_details
