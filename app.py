@@ -4,8 +4,69 @@ import re
 import streamlit as st
 import pandas as pd
 
-# إعدادات الصفحة
+# ==========================================
+# ⚙️ إعدادات الصفحة والتصميم
+# ==========================================
 st.set_page_config(page_title="نظام بحث الصيدليات", page_icon="💊", layout="wide")
+
+# لمسات التصميم والـ Custom CSS الاحترافي
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Tajawal', sans-serif;
+        direction: rtl;
+    }
+
+    .main {
+        background-color: #f8fafc;
+    }
+
+    /* أزرار احترافية بتأثير Gradient وحركة Hover */
+    .stButton>button {
+        width: 100%;
+        border-radius: 12px !important;
+        height: 3.1em !important;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        color: white !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        border: none !important;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2) !important;
+        transition: all 0.25s ease-in-out !important;
+    }
+
+    .stButton>button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 15px -3px rgba(37, 99, 235, 0.35) !important;
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+    }
+
+    /* تحسين القائمة الجانبية */
+    section[data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-left: 1px solid #e2e8f0 !important;
+    }
+
+    /* تحسين صناديق الإدخال والقوائم */
+    .stTextInput>div>div>input, .stSelectbox>div>div>div {
+        border-radius: 10px !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    .stTextInput>div>div>input:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+    }
+
+    /* كروت العرض والتجاوَب */
+    div[data-testid="stMetricValue"] {
+        font-size: 22px !important;
+        font-weight: 700 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 USER_DB_FILE = "users.json"
 DATA_FOLDER = "data"
@@ -32,7 +93,6 @@ def save_users(users):
     with open(USER_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(users, f, ensure_ascii=False, indent=4)
 
-# 1. دالة موحدة للتحقق من ملفات إكسيل بدون الحساسية لحالة الأحرف (.xlsx, .XLSX, .xls, .XLS)
 def is_excel_file(filename):
     return filename.lower().endswith(('.xlsx', '.xls'))
 
@@ -50,7 +110,6 @@ def read_excel_smart(file_path):
     df.columns = df.columns.astype(str).str.strip()
     return df
 
-# دالة تنظيف الكود وحذف الأصفار من على الشمال
 def clean_code_val(val):
     if pd.isna(val) or str(val).strip() in ['nan', 'None', '-', '']:
         return '-'
@@ -65,21 +124,17 @@ def clean_code_val(val):
     clean_code = val_str.lstrip('0')
     return clean_code if clean_code else '0'
 
-# دالة استخراج السنة والشهر من اسم الملف
 def extract_year_month_from_filename(file_name):
     base_name = os.path.splitext(file_name)[0]
     
-    # البادئة القياسية (2026_02_اسم_الملف)
     m_prefix = re.match(r'^(\d{4})_(\d{1,2})', base_name)
     if m_prefix:
         y, m = int(m_prefix.group(1)), int(m_prefix.group(2))
         return f"{y}_{m:02d}"
 
-    # البحث عن السنة (4 أرقام)
     year_match = re.search(r'(20\d{2})', base_name)
     year = int(year_match.group(1)) if year_match else 2026
 
-    # أسماء الشهور بالعربية
     arabic_months = {
         'يناير': 1, 'فبراير': 2, 'مارس': 3, 'أبريل': 4, 'ابريل': 4,
         'مايو': 5, 'يونيو': 6, 'يوليو': 7, 'أغسطس': 8, 'اغسطس': 8,
@@ -89,7 +144,6 @@ def extract_year_month_from_filename(file_name):
         if month_name in base_name:
             return f"{year}_{m_num:02d}"
 
-    # أشكال مثل: 12-2025 أو 2-2026 أو 4-2026
     m_ym = re.search(r'(\d{1,2})\s*[-_]\s*(20\d{2})', base_name)
     if m_ym:
         m, y = int(m_ym.group(1)), int(m_ym.group(2))
@@ -100,7 +154,6 @@ def extract_year_month_from_filename(file_name):
         y, m = int(m_my.group(1)), int(m_my.group(2))
         return f"{y}_{m:02d}"
 
-    # أشكال مثل: فارما 9 أو فارما 7 أو فارما 3
     m_single = re.search(r'(?:شهر|\b)\s*(\d{1,2})\b', base_name)
     if m_single:
         m = int(m_single.group(1))
@@ -122,7 +175,6 @@ def load_distributor_data(folder_path):
         try:
             df = read_excel_smart(file_path)
             
-            # محاولة استخراج التاريخ أولاً من أعمدة التاريخ
             year_month = None
             date_col = next((c for c in df.columns if any(k in c.lower() for k in ['invoice date', 'date', 'التاريخ'])), None)
             
@@ -136,7 +188,6 @@ def load_distributor_data(folder_path):
                 except Exception:
                     year_month = None
             
-            # إذا لم يجد تاريخاً صالحاً في الأعمدة، يتجه لاستخراجه من اسم الملف
             if not year_month or year_month == "غير محدد":
                 year_month = extract_year_month_from_filename(file_name)
 
@@ -180,7 +231,7 @@ def audit_uploaded_files():
 
     return total_files_checked, audit_results
 
-# تهيئة الجلسة - إلغاء تسجيل الدخول مؤقتاً بالافتراض المباشر True
+# تهيئة الجلسة (إلغاء تسجيل الدخول مؤقتاً بالافتراض المباشر True)
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = True
 if 'user_info' not in st.session_state:
@@ -204,20 +255,20 @@ def clear_region():
     st.session_state['selected_region_key'] = "كل المناطق"
 
 # ==========================================
-# 🏠 النظام الأساسي (مباشر بدون صفحة تسجيل دخول)
+# 🏠 القائمة الجانبية والنظام
 # ==========================================
 user = st.session_state['user_info']
 
 with st.sidebar:
     st.write(f"👤 **أهلاً: {user['name']}**")
     st.caption(f"الرتبة: {'مدير نظام' if user['role'] == 'admin' else 'مستخدم'}")
+    st.markdown("---")
     
     if st.button("الرئيسية 🏠", use_container_width=True):
         st.session_state['current_page'] = 'welcome'
         st.rerun()
 
     if user['role'] == 'admin':
-        st.markdown("---")
         st.subheader("⚙️ لوحة التحكم")
 
         with st.expander("👤 ➕ إضافة مستخدم جديد"):
@@ -243,12 +294,10 @@ with st.sidebar:
             st.session_state['current_page'] = 'health_check'
             st.rerun()
 
-    st.markdown("---")
-
-# --- الرئيسية ---
+# --- الشاشة الرئيسية ---
 if st.session_state['current_page'] == 'welcome':
-    st.markdown(f"<h1 style='text-align: center;'>👋 أهلاً بك يا {user['name']}</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center; color: gray;'>اختر الموزع للبدء في عملية البحث</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center; color: #1e293b;'>👋 أهلاً بك يا {user['name']}</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: #64748b;'>اختر الموزع للبدء في عملية البحث المباشرة</h4>", unsafe_allow_html=True)
     st.write("")
 
     c1, c2 = st.columns(2)
@@ -260,7 +309,7 @@ if st.session_state['current_page'] == 'welcome':
 
     with c2:
         st.markdown("---")
-        if st.button("📦 البحث في فارما", use_container_width=True):
+        if st.button("📦 البحث في فارما أوفيرسيز", use_container_width=True):
             st.session_state['current_page'] = 'pharma'
             st.rerun()
 
@@ -343,7 +392,7 @@ elif st.session_state['current_page'] == 'upload_calendar':
 elif st.session_state['current_page'] == 'health_check':
     st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
     st.header("🔍 نتيجة فحص سلامة وقراءة الشيتات المرفوعة")
-    st.write("يقوم النظام بمسح وفحص كافة شيتات الإكسيل المرفوعة للتيقن من سلامة قراءتها في قواعد البيانات:")
+    st.write("يقوم النظام بمسح وفحص كافة شيتات الإكسيل المرفوعة للتيقن من سلامة قراءتها:")
 
     with st.spinner("جاري فحص جميع الملفات المرفوعة..."):
         total_count, errors = audit_uploaded_files()
@@ -355,11 +404,11 @@ elif st.session_state['current_page'] == 'health_check':
     elif not errors:
         st.success(f"🟢 **ممتاز جداً! جميع الملفات المرفوعة (عددها {total_count} ملف) سليمة ومقروءة 100% بدون أي مشاكل.**")
     else:
-        st.warning(f"⚠️ تم فحص {total_count} ملف، وعثر النظام على بعض الملاحظات أو الأخطاء في {len(errors)} ملف:")
+        st.warning(f"⚠️ تم فحص {total_count} ملف، وعثر النظام على بعض الملاحظات في {len(errors)} ملف:")
         for dist, fname, issue in errors:
             st.error(f"🏢 **الموزع:** {dist} | 📄 **الملف:** `{fname}` 👈 **المشكلة:** {issue}")
 
-# --- شاشة البحث ---
+# --- شاشة البحث التفصيلي ---
 elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
     dist_code = st.session_state['current_page']
     dist_title = "ابن سينا" if dist_code == 'ibnsina' else "فارما أوفيرسيز"
@@ -369,7 +418,7 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
     with c_top1:
         st.button("⬅️ العودة للرئيسية", on_click=lambda: st.session_state.update({'current_page': 'welcome'}))
     with c_top2:
-        if st.button("🔄 تحديث البيانات", help="اضغط هنا لإلغاء أي ذاكرة مؤقتة وتطبيق القواعد الجديدة"):
+        if st.button("🔄 تحديث البيانات", help="اضغط لإلغاء أي ذاكرة مؤقتة وقراءة الملفات الجديدة"):
             st.cache_data.clear()
             st.rerun()
 
@@ -433,7 +482,7 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
                 st.session_state['selected_region_key'] = "كل المناطق"
 
             selected_region = st.selectbox(
-                "2. اختر المنطقة (تخمين أوتوماتيكي من الشيتات):", 
+                "2. اختر المنطقة:", 
                 options=available_regions,
                 key="selected_region_key"
             )
@@ -505,7 +554,7 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
                     m1, m2, m3 = st.columns(3)
                     
                     with m1:
-                        st.caption("🔑 كود الصيدلية الثابت (اضغط للنسخ):")
+                        st.caption("🔑 كود الصيدلية الثابت:")
                         st.code(val_code, language=None)
 
                     with m2:
@@ -518,20 +567,20 @@ elif st.session_state['current_page'] in ['ibnsina', 'pharma']:
 
                     if addr_col and addr_col in first_row:
                         val_addr = str(first_row.get(addr_col, '-'))
-                        st.caption("📍 العنوان التفصيلي (اضغط للنسخ):")
+                        st.caption("📍 العنوان التفصيلي:")
                         st.code(val_addr, language=None)
 
                     months_found = pharm_details['سنة_شهر'].unique().tolist()
                     st.success(f"📊 تم العثور على مسحوبات للعميل في **{len(months_found)}** شهر/ملف: ({' ، '.join(months_found)})")
 
-                    st.markdown("### 📦 سجل كافة مسحوبات العميل من جميع الشيتات بالكامل:")
+                    st.markdown("### 📦 سجل كافة مسحوبات العميل من جميع الشيتات:")
                     
-                    # ترتيب الأعمدة: سنة_شهر كـ أول عمود، وتطبيق hide_index لإزالة أرقام Index العشوائية
+                    # ترتيب الأعمدة: تثبيت 'سنة_شهر' كـ أول عمود
                     ordered_cols = [c for c in ['سنة_شهر', b_code, b_name, item_col, qty_col, addr_col] if c and c in pharm_details.columns]
                     
                     final_df_display = pharm_details[ordered_cols] if ordered_cols else pharm_details
                     
-                    # عرض الجدول بدون عمود الأرقام العشوائية (hide_index=True)
+                    # عرض الجدول مع إخفاء الأرقام التسلسلية العشوائية (hide_index=True)
                     st.dataframe(final_df_display, use_container_width=True, hide_index=True)
 
             else:
